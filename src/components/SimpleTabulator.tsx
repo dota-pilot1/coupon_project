@@ -51,6 +51,7 @@ export default function SimpleTabulator5({
 }: SimpleTabulatorProps) {
   const tableRef = useRef<HTMLDivElement>(null)
   const tabulatorRef = useRef<Tabulator | null>(null)
+  const tableBuiltRef = useRef(false)
 
   // Store callbacks in refs to avoid recreating Tabulator
   const onRowClickRef = useRef(onRowClick)
@@ -61,6 +62,7 @@ export default function SimpleTabulator5({
   // Initialize Tabulator
   useEffect(() => {
     if (!tableRef.current) return
+    tableBuiltRef.current = false
 
     const table = new Tabulator(tableRef.current, {
       data,
@@ -71,6 +73,10 @@ export default function SimpleTabulator5({
       selectable: selectable ? 1 : false,
       reactiveData: false,
       headerSortClickElement: 'icon',
+    })
+
+    table.on('tableBuilt', () => {
+      tableBuiltRef.current = true
     })
 
     table.on('rowClick', (...args: unknown[]) => {
@@ -88,13 +94,14 @@ export default function SimpleTabulator5({
     return () => {
       table.destroy()
       tabulatorRef.current = null
+      tableBuiltRef.current = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columns, height, layout, placeholder, selectable])
 
-  // Update data reactively
+  // Update data reactively (only after tableBuilt)
   useEffect(() => {
-    if (tabulatorRef.current) {
+    if (tabulatorRef.current && tableBuiltRef.current) {
       tabulatorRef.current.replaceData(data).catch(() => {})
     }
   }, [data])
