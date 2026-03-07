@@ -98,8 +98,28 @@ export default function Home() {
   }
 
   const handleSave = () => {
-    if (!formData.name) {
+    if (!formData.name.trim()) {
       alert('쿠폰명을 입력하세요.', '입력 오류')
+      return
+    }
+    if (!formData.discountValue || formData.discountValue <= 0) {
+      alert('할인값을 입력하세요.', '입력 오류')
+      return
+    }
+    if (formData.discountType === 'RATE' && formData.discountValue > 100) {
+      alert('정률 할인은 100%를 초과할 수 없습니다.', '입력 오류')
+      return
+    }
+    if (!formData.startDate) {
+      alert('유효기간 시작일을 입력하세요.', '입력 오류')
+      return
+    }
+    if (!formData.endDate) {
+      alert('유효기간 종료일을 입력하세요.', '입력 오류')
+      return
+    }
+    if (formData.startDate > formData.endDate) {
+      alert('유효기간 종료일은 시작일 이후여야 합니다.', '입력 오류')
       return
     }
     saveMutation.mutate({
@@ -217,7 +237,7 @@ export default function Home() {
                     </select>
                   </td>
                   <th className="bg-gray-50 border border-gray-200 px-3 py-2 text-left font-normal whitespace-nowrap">
-                    할인값
+                    할인값 <span className="text-red-500">*</span>
                   </th>
                   <td className="border border-gray-200 px-3 py-1">
                     <input

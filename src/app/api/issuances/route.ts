@@ -10,7 +10,11 @@ export async function GET() {
       id: couponIssuance.id,
       couponId: couponIssuance.couponId,
       couponName: couponMaster.name,
+      issueTitle: couponIssuance.issueTitle,
+      issueType: couponIssuance.issueType,
       issueQty: couponIssuance.issueQty,
+      validStartDate: couponIssuance.validStartDate,
+      validEndDate: couponIssuance.validEndDate,
       issueDt: couponIssuance.issueDt,
       memo: couponIssuance.memo,
       createdAt: couponIssuance.createdAt,
@@ -25,7 +29,7 @@ export async function GET() {
 // 쿠폰 발급 실행
 export async function POST(req: Request) {
   const body = await req.json()
-  const { couponId, issueQty, memo } = body
+  const { couponId, issueQty, memo, issueTitle, issueType, validStartDate, validEndDate } = body
 
   // 쿠폰 존재 확인
   const coupon = db
@@ -50,7 +54,11 @@ export async function POST(req: Request) {
     .values({
       id: issuanceId,
       couponId,
+      issueTitle: issueTitle || null,
+      issueType: issueType || 'FIRST_COME',
       issueQty,
+      validStartDate: validStartDate || null,
+      validEndDate: validEndDate || null,
       issueDt: now.slice(0, 10),
       memo: memo || null,
       createdAt: now,

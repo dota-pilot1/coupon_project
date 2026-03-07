@@ -26,7 +26,11 @@ type IssuanceRecord = {
   id: string
   couponId: string
   couponName: string
+  issueTitle: string | null
+  issueType: string
   issueQty: number
+  validStartDate: string | null
+  validEndDate: string | null
   issueDt: string
   memo: string | null
   createdAt: string
@@ -48,10 +52,12 @@ const couponColumns: ColumnDefinition[] = [
 
 const historyColumns: ColumnDefinition[] = [
   { title: 'No.', field: 'rn', width: 50, hozAlign: 'center', headerSort: false },
-  { title: '발급ID', field: 'id', minWidth: 100, hozAlign: 'left' },
-  { title: '수량', field: 'issueQty', width: 70, hozAlign: 'center' },
-  { title: '발급일', field: 'issueDt', width: 100, hozAlign: 'center' },
-  { title: '메모', field: 'memo', minWidth: 100, hozAlign: 'left' },
+  { title: '발행제목', field: 'issueTitle', minWidth: 100, hozAlign: 'left' },
+  { title: '유형', field: 'issueTypeDisplay', width: 70, hozAlign: 'center' },
+  { title: '수량', field: 'issueQty', width: 60, hozAlign: 'center' },
+  { title: '유효기간', field: 'validPeriod', width: 160, hozAlign: 'center' },
+  { title: '발급일', field: 'issueDt', width: 90, hozAlign: 'center' },
+  { title: '메모', field: 'memo', minWidth: 80, hozAlign: 'left' },
 ]
 
 const issuedColumns: ColumnDefinition[] = [
@@ -64,7 +70,11 @@ export default function IssuancePage() {
   const queryClient = useQueryClient()
   const { confirm, alert } = useConfirmDialog()
   const [selectedCoupon, setSelectedCoupon] = useState<Coupon | null>(null)
+  const [issueTitle, setIssueTitle] = useState('')
+  const [issueType, setIssueType] = useState('FIRST_COME')
   const [issueQty, setIssueQty] = useState(1)
+  const [validStartDate, setValidStartDate] = useState('')
+  const [validEndDate, setValidEndDate] = useState('')
   const [memo, setMemo] = useState('')
   const [issuedResult, setIssuedResult] = useState<IssuedCoupon[]>([])
   const [searchName, setSearchName] = useState('')
@@ -86,7 +96,11 @@ export default function IssuancePage() {
   })
 
   const issueMutation = useMutation({
-    mutationFn: (data: { couponId: string; issueQty: number; memo: string }) =>
+    mutationFn: (data: {
+      couponId: string; issueQty: number; memo: string;
+      issueTitle: string; issueType: string;
+      validStartDate: string; validEndDate: string;
+    }) =>
       fetch('/api/issuances', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,14 +134,21 @@ export default function IssuancePage() {
       description: `[${selectedCoupon.name}] ${issueQty}건을 발급하시겠습니까?`,
     })
     if (!ok) return
-    issueMutation.mutate({ couponId: selectedCoupon.id, issueQty, memo })
+    issueMutation.mutate({
+      couponId: selectedCoupon.id, issueQty, memo,
+      issueTitle, issueType, validStartDate, validEndDate,
+    })
   }
 
   const handleCouponRowClick = (row: Record<string, unknown>) => {
     const coupon = coupons.find((c) => c.id === row.id)
     if (coupon) {
       setSelectedCoupon(coupon)
+      setIssueTitle('')
+      setIssueType('FIRST_COME')
       setIssueQty(1)
+      setValidStartDate(coupon.startDate || '')
+      setValidEndDate(coupon.endDate || '')
       setMemo('')
       setIssuedResult([])
       setActiveTab('info')
@@ -136,7 +157,11 @@ export default function IssuancePage() {
 
   const handleNew = () => {
     setSelectedCoupon(null)
+    setIssueTitle('')
+    setIssueType('FIRST_COME')
     setIssueQty(1)
+    setValidStartDate('')
+    setValidEndDate('')
     setMemo('')
     setIssuedResult([])
     setActiveTab('info')
@@ -161,11 +186,21 @@ export default function IssuancePage() {
   // 선택된 쿠폰의 발급 이력
   const historyGridData = useMemo(() => {
     if (!selectedCoupon) return []
+    const typeLabels: Record<string, string> = {
+      FIRST_COME: '선착순',
+      TARGET: '타겟',
+      AUTO: '자동',
+    }
     return issuances
       .filter((iss) => iss.couponId === selectedCoupon.id)
       .map((iss, i) => ({
         ...iss,
         rn: i + 1,
+        issueTitle: iss.issueTitle || '-',
+        issueTypeDisplay: typeLabels[iss.issueType] || iss.issueType,
+        validPeriod: iss.validStartDate && iss.validEndDate
+          ? `${iss.validStartDate} ~ ${iss.validEndDate}`
+          : '-',
         memo: iss.memo || '-',
       }))
   }, [issuances, selectedCoupon])
@@ -271,7 +306,8 @@ export default function IssuancePage() {
 
           {activeTab === 'info' ? (
             <div className="p-4">
-              {/* 쿠폰 기본 정보 (FSCPS 상세폼 th/td 패턴) */}
+              {/* 쿠폰 기본 정보 (읽기 전용) */}
+              <div className="text-xs text-gray-400 mb-1">쿠폰 기본정보</div>
               <table className="w-full border-collapse text-sm mb-4">
                 <tbody>
                   <tr>
@@ -298,9 +334,9 @@ export default function IssuancePage() {
                   </tr>
                   <tr>
                     <th className="bg-gray-50 border border-gray-200 px-3 py-2 text-left font-normal whitespace-nowrap">
-                      유효기간
+                      마스터 유효기간
                     </th>
-                    <td className="border border-gray-200 px-3 py-2" colSpan={3}>
+                    <td className="border border-gray-200 px-3 py-2 text-gray-500" colSpan={3}>
                       {selectedCoupon
                         ? `${selectedCoupon.startDate || '-'} ~ ${selectedCoupon.endDate || '-'}`
                         : '-'}
@@ -309,10 +345,41 @@ export default function IssuancePage() {
                 </tbody>
               </table>
 
-              {/* 발급 입력 폼 */}
+              {/* 발행 입력 폼 (FSCPS 패턴: 발행 건별 설정) */}
+              <div className="text-xs text-gray-400 mb-1">발행 정보 입력</div>
               <table className="w-full border-collapse text-sm">
                 <tbody>
                   <tr>
+                    <th className="bg-gray-50 border border-gray-200 px-3 py-2 text-left font-normal w-28 whitespace-nowrap">
+                      발행제목
+                    </th>
+                    <td className="border border-gray-200 px-3 py-1" colSpan={3}>
+                      <input
+                        type="text"
+                        value={issueTitle}
+                        onChange={(e) => setIssueTitle(e.target.value)}
+                        placeholder="예: 3월 봄맞이 이벤트"
+                        disabled={!selectedCoupon}
+                        className="w-full border rounded px-2 py-1 disabled:bg-gray-100"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <th className="bg-gray-50 border border-gray-200 px-3 py-2 text-left font-normal w-28 whitespace-nowrap">
+                      발행유형 <span className="text-red-500">*</span>
+                    </th>
+                    <td className="border border-gray-200 px-3 py-1">
+                      <select
+                        value={issueType}
+                        onChange={(e) => setIssueType(e.target.value)}
+                        disabled={!selectedCoupon}
+                        className="border rounded px-2 py-1 disabled:bg-gray-100"
+                      >
+                        <option value="FIRST_COME">선착순</option>
+                        <option value="TARGET">타겟</option>
+                        <option value="AUTO">자동</option>
+                      </select>
+                    </td>
                     <th className="bg-gray-50 border border-gray-200 px-3 py-2 text-left font-normal w-28 whitespace-nowrap">
                       발급 수량 <span className="text-red-500">*</span>
                     </th>
@@ -328,10 +395,37 @@ export default function IssuancePage() {
                       />
                       <span className="text-xs text-gray-400 ml-2">최대 100건</span>
                     </td>
+                  </tr>
+                  <tr>
+                    <th className="bg-gray-50 border border-gray-200 px-3 py-2 text-left font-normal whitespace-nowrap">
+                      유효기간 <span className="text-red-500">*</span>
+                    </th>
+                    <td className="border border-gray-200 px-3 py-1" colSpan={3}>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="date"
+                          value={validStartDate}
+                          onChange={(e) => setValidStartDate(e.target.value)}
+                          disabled={!selectedCoupon}
+                          className="border rounded px-2 py-1 disabled:bg-gray-100"
+                        />
+                        <span className="text-gray-400">~</span>
+                        <input
+                          type="date"
+                          value={validEndDate}
+                          onChange={(e) => setValidEndDate(e.target.value)}
+                          disabled={!selectedCoupon}
+                          className="border rounded px-2 py-1 disabled:bg-gray-100"
+                        />
+                        <span className="text-xs text-gray-400 ml-2">마스터 기간과 별도 설정 가능</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
                     <th className="bg-gray-50 border border-gray-200 px-3 py-2 text-left font-normal w-28 whitespace-nowrap">
                       메모
                     </th>
-                    <td className="border border-gray-200 px-3 py-1">
+                    <td className="border border-gray-200 px-3 py-1" colSpan={3}>
                       <input
                         type="text"
                         value={memo}

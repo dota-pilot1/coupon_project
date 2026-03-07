@@ -108,7 +108,11 @@ export const condTime = sqliteTable('cond_time', {
 export const couponIssuance = sqliteTable('coupon_issuance', {
   id: text('id').primaryKey(),
   couponId: text('coupon_id').notNull().references(() => couponMaster.id),
+  issueTitle: text('issue_title'), // 발행제목 (이벤트 구분용)
+  issueType: text('issue_type').notNull().default('FIRST_COME'), // FIRST_COME=선착순, TARGET=타겟, AUTO=자동
   issueQty: integer('issue_qty').notNull(),
+  validStartDate: text('valid_start_date'), // 발행 건별 유효기간 시작
+  validEndDate: text('valid_end_date'),     // 발행 건별 유효기간 종료
   issueDt: text('issue_dt').notNull(),
   memo: text('memo'),
   createdAt: text('created_at').notNull(),

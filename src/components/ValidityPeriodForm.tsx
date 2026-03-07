@@ -104,7 +104,7 @@ export default function ValidityPeriodForm({
         <tbody>
           <tr>
             <th className="bg-gray-50 border border-gray-200 px-3 py-2 text-left font-normal w-28 whitespace-nowrap">
-              시작일
+              시작일 <span className="text-red-500">*</span>
             </th>
             <td className="border border-gray-200 px-3 py-1">
               <input
@@ -115,7 +115,7 @@ export default function ValidityPeriodForm({
               />
             </td>
             <th className="bg-gray-50 border border-gray-200 px-3 py-2 text-left font-normal w-28 whitespace-nowrap">
-              종료일
+              종료일 <span className="text-red-500">*</span>
             </th>
             <td className="border border-gray-200 px-3 py-1">
               <input
