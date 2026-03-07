@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/db'
-import { couponMaster, condShop, condSite, condCorner, condMenu } from '@/db/schema'
+import { couponMaster, condShop, condSite, condCorner, condMenu, condTime } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
 // 쿠폰 목록 조회
@@ -31,6 +31,7 @@ export async function POST(req: Request) {
           description: body.description,
           discountType: body.discountType,
           discountValue: body.discountValue,
+          termTypeCd: body.termTypeCd ?? '00',
           startDate: body.startDate,
           endDate: body.endDate,
           useYn: body.useYn ?? 'Y',
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
           description: body.description,
           discountType: body.discountType ?? 'RATE',
           discountValue: body.discountValue ?? 0,
+          termTypeCd: body.termTypeCd ?? '00',
           startDate: body.startDate,
           endDate: body.endDate,
           useYn: body.useYn ?? 'Y',
@@ -60,6 +62,7 @@ export async function POST(req: Request) {
     tx.delete(condCorner).where(eq(condCorner.couponId, couponId)).run()
     tx.delete(condSite).where(eq(condSite.couponId, couponId)).run()
     tx.delete(condShop).where(eq(condShop.couponId, couponId)).run()
+    tx.delete(condTime).where(eq(condTime.couponId, couponId)).run()
 
     // 3. 조건 재등록 (탭별 = 점포별 데이터)
     const insertLog: Array<{ table: string; data: Record<string, string> }> = []
@@ -103,6 +106,37 @@ export async function POST(req: Request) {
           insertLog.push({ table: 'COND_MENU', data: menuRow })
         }
       }
+    }
+
+    // 4. 유효 기간 제어 (시간대/요일) 저장
+    const termTypeCd = body.termTypeCd ?? '00'
+
+    // 시간대 저장 (termTypeCd가 '10' 또는 '11')
+    if (termTypeCd === '10' || termTypeCd === '11') {
+      const timeSlots = body.timeSlots || []
+      for (let i = 0; i < timeSlots.length; i++) {
+        const row = {
+          couponId,
+          timeCondCd: '1',
+          timeCondSeq: i + 1,
+          startTm: timeSlots[i].startTm,
+          endTm: timeSlots[i].endTm,
+        }
+        tx.insert(condTime).values(row).run()
+        insertLog.push({ table: 'COND_TIME', data: { ...row, timeCondSeq: String(row.timeCondSeq) } })
+      }
+    }
+
+    // 요일 저장 (termTypeCd가 '01' 또는 '11')
+    if (termTypeCd === '01' || termTypeCd === '11') {
+      const row = {
+        couponId,
+        timeCondCd: '2',
+        timeCondSeq: 0,
+        dayOfWeek: body.dayOfWeek || '0000000',
+      }
+      tx.insert(condTime).values(row).run()
+      insertLog.push({ table: 'COND_TIME', data: { ...row, timeCondSeq: String(row.timeCondSeq) } })
     }
 
     return { id: couponId, insertLog }

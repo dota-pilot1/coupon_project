@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ShopTabs from '@/components/ShopTabs'
+import ValidityPeriodForm from '@/components/ValidityPeriodForm'
 
 type Coupon = {
   id: string
@@ -21,7 +22,12 @@ export default function Home() {
     description: '',
     discountType: 'RATE',
     discountValue: 0,
+    termTypeCd: '00',
+    startDate: '',
+    endDate: '',
   })
+  const [timeSlots, setTimeSlots] = useState<Array<{ startTm: string; endTm: string }>>([])
+  const [dayOfWeek, setDayOfWeek] = useState('0000000')
   const [conditions, setConditions] = useState<
     Array<{
       shopId: string
@@ -63,7 +69,12 @@ export default function Home() {
       description: data.description || '',
       discountType: data.discountType,
       discountValue: data.discountValue,
+      termTypeCd: data.termTypeCd || '00',
+      startDate: data.startDate || '',
+      endDate: data.endDate || '',
     })
+    setTimeSlots(data.timeSlots || [])
+    setDayOfWeek(data.dayOfWeek || '0000000')
     setConditions(data.conditions || [])
   }
 
@@ -75,7 +86,10 @@ export default function Home() {
       description: '',
       discountType: 'RATE',
       discountValue: 0,
+      termTypeCd: '00',
     })
+    setTimeSlots([])
+    setDayOfWeek('0000000')
     setConditions([])
   }
 
@@ -86,6 +100,8 @@ export default function Home() {
     }
     saveMutation.mutate({
       ...formData,
+      timeSlots,
+      dayOfWeek,
       conditions,
     })
   }
@@ -229,7 +245,28 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 저장 로그 */}
+            {/* 유효 기간 제어 */}
+            <div className="border rounded mt-4">
+              <div className="p-3 border-b bg-gray-50">
+                <span className="font-medium text-sm">유효 기간 제어</span>
+              </div>
+              <div className="p-4">
+                <ValidityPeriodForm
+                  startDate={formData.startDate}
+                  endDate={formData.endDate}
+                  onStartDateChange={(d) => setFormData({ ...formData, startDate: d })}
+                  onEndDateChange={(d) => setFormData({ ...formData, endDate: d })}
+                  termTypeCd={formData.termTypeCd}
+                  onTermTypeChange={(cd) => setFormData({ ...formData, termTypeCd: cd })}
+                  timeSlots={timeSlots}
+                  onTimeSlotsChange={setTimeSlots}
+                  dayOfWeek={dayOfWeek}
+                  onDayOfWeekChange={setDayOfWeek}
+                />
+              </div>
+            </div>
+
+            {/* 저장 로그 (JSON) */}
             {saveLog.length > 0 && (
               <div className="mt-4 border rounded">
                 <div className="flex items-center justify-between p-2 border-b bg-gray-800 text-white rounded-t">
@@ -241,16 +278,19 @@ export default function Home() {
                     닫기
                   </button>
                 </div>
-                <div className="bg-gray-900 text-green-400 p-3 rounded-b max-h-[200px] overflow-y-auto font-mono text-xs space-y-1">
-                  {saveLog.map((log, i) => (
-                    <div key={i}>
-                      <span className="text-yellow-400">[{log.table}]</span>{' '}
-                      {Object.entries(log.data)
-                        .map(([k, v]) => `${k}=${v}`)
-                        .join(', ')}
-                    </div>
-                  ))}
-                </div>
+                <pre className="bg-gray-900 text-green-400 p-3 rounded-b max-h-[300px] overflow-y-auto font-mono text-xs whitespace-pre">
+{JSON.stringify(
+  Object.entries(
+    saveLog.reduce((acc, log) => {
+      if (!acc[log.table]) acc[log.table] = []
+      acc[log.table].push(log.data)
+      return acc
+    }, {} as Record<string, Record<string, string>[]>)
+  ).reduce((obj, [k, v]) => ({ ...obj, [k]: v }), {}),
+  null,
+  2
+)}
+                </pre>
               </div>
             )}
           </div>

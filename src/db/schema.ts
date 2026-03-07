@@ -43,6 +43,7 @@ export const couponMaster = sqliteTable('coupon_master', {
   discountValue: integer('discount_value').notNull().default(0),
   startDate: text('start_date'),
   endDate: text('end_date'),
+  termTypeCd: text('term_type_cd').notNull().default('00'), // 00=일자, 10=시간대, 01=요일, 11=시간대+요일
   useYn: text('use_yn').notNull().default('Y'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
@@ -81,4 +82,19 @@ export const condMenu = sqliteTable('cond_menu', {
   condSiteId: text('cond_site_id').notNull().references(() => sites.id),
   condCornerId: text('cond_corner_id').notNull().references(() => corners.id),
   menuId: text('menu_id').notNull().references(() => menus.id),
+})
+
+// ========================================
+// 유효 기간 제어 (시간대/요일 조건)
+// TIME_COND_CD: '1' = 시간대, '2' = 요일
+// ========================================
+
+export const condTime = sqliteTable('cond_time', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  couponId: text('coupon_id').notNull().references(() => couponMaster.id, { onDelete: 'cascade' }),
+  timeCondCd: text('time_cond_cd').notNull(), // '1'=시간대, '2'=요일
+  timeCondSeq: integer('time_cond_seq').notNull().default(0),
+  startTm: text('start_tm'), // HH:MM (시간대용)
+  endTm: text('end_tm'),     // HH:MM (시간대용)
+  dayOfWeek: text('day_of_week'), // '1111100' 비트맵 (요일용)
 })

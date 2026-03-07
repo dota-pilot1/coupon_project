@@ -6,12 +6,13 @@ import {
   condSite,
   condCorner,
   condMenu,
+  condTime,
   shops,
   sites,
   corners,
   menus,
 } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 
 // 쿠폰 상세 조회 (마스터 + 사용제한 조건)
 export async function GET(
@@ -105,5 +106,23 @@ export async function GET(
     }
   })
 
-  return NextResponse.json({ ...master, conditions })
+  // 유효 기간 제어 데이터
+  const timeSlots = db
+    .select({ startTm: condTime.startTm, endTm: condTime.endTm, timeCondSeq: condTime.timeCondSeq })
+    .from(condTime)
+    .where(and(eq(condTime.couponId, couponId), eq(condTime.timeCondCd, '1')))
+    .all()
+
+  const weekRow = db
+    .select({ dayOfWeek: condTime.dayOfWeek })
+    .from(condTime)
+    .where(and(eq(condTime.couponId, couponId), eq(condTime.timeCondCd, '2')))
+    .get()
+
+  return NextResponse.json({
+    ...master,
+    conditions,
+    timeSlots,
+    dayOfWeek: weekRow?.dayOfWeek || '0000000',
+  })
 }
