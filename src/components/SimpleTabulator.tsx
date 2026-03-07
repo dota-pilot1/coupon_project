@@ -95,7 +95,7 @@ export default function SimpleTabulator5({
   // Update data reactively
   useEffect(() => {
     if (tabulatorRef.current) {
-      tabulatorRef.current.replaceData(data)
+      tabulatorRef.current.replaceData(data).catch(() => {})
     }
   }, [data])
 
