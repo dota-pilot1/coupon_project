@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ShopTabs from '@/components/ShopTabs'
 import ValidityPeriodForm from '@/components/ValidityPeriodForm'
+import { useConfirmDialog } from '@/components/ConfirmDialog'
 
 type Coupon = {
   id: string
@@ -15,6 +16,7 @@ type Coupon = {
 
 export default function Home() {
   const queryClient = useQueryClient()
+  const { alert } = useConfirmDialog()
   const [selectedCoupon, setSelectedCoupon] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     id: '',
@@ -97,7 +99,7 @@ export default function Home() {
 
   const handleSave = () => {
     if (!formData.name) {
-      alert('쿠폰명을 입력하세요.')
+      alert('쿠폰명을 입력하세요.', '입력 오류')
       return
     }
     saveMutation.mutate({

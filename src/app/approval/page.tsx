@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useConfirmDialog } from '@/components/ConfirmDialog'
 
 type CouponApproval = {
   id: string
@@ -37,6 +38,7 @@ const ACTION_BUTTONS: Record<string, Array<{ newStatus: string; label: string; c
 export default function ApprovalPage() {
   const queryClient = useQueryClient()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const { confirm, alert } = useConfirmDialog()
   const [filterStatus, setFilterStatus] = useState<string>('ALL')
 
   const { data: coupons = [] } = useQuery<CouponApproval[]>({
@@ -59,7 +61,7 @@ export default function ApprovalPage() {
       queryClient.invalidateQueries({ queryKey: ['approvalList'] })
     },
     onError: (err: Error) => {
-      alert(err.message)
+      alert(err.message, '오류')
     },
   })
 
@@ -69,9 +71,13 @@ export default function ApprovalPage() {
 
   const selected = coupons.find((c) => c.id === selectedId)
 
-  const handleStatusChange = (couponId: string, newStatus: string) => {
+  const handleStatusChange = async (couponId: string, newStatus: string) => {
     const statusLabel = STATUS_LABELS[newStatus]?.label || newStatus
-    if (!confirm(`'${statusLabel}'(으)로 변경하시겠습니까?`)) return
+    const ok = await confirm({
+      title: '상태 변경',
+      description: `'${statusLabel}'(으)로 변경하시겠습니까?`,
+    })
+    if (!ok) return
     statusMutation.mutate({ couponId, newStatus })
   }
 

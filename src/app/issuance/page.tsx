@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useConfirmDialog } from '@/components/ConfirmDialog'
 
 type Coupon = {
   id: string
@@ -28,6 +29,7 @@ type IssuedCoupon = {
 
 export default function IssuancePage() {
   const queryClient = useQueryClient()
+  const { confirm, alert } = useConfirmDialog()
   const [selectedCouponId, setSelectedCouponId] = useState('')
   const [issueQty, setIssueQty] = useState(1)
   const [memo, setMemo] = useState('')
@@ -64,20 +66,24 @@ export default function IssuancePage() {
       setIssuedResult(result.coupons || [])
     },
     onError: (err: Error) => {
-      alert(err.message)
+      alert(err.message, '오류')
     },
   })
 
-  const handleIssue = () => {
+  const handleIssue = async () => {
     if (!selectedCouponId) {
-      alert('발급할 쿠폰을 선택하세요.')
+      await alert('발급할 쿠폰을 선택하세요.', '안내')
       return
     }
     if (issueQty < 1 || issueQty > 100) {
-      alert('발급 수량은 1~100 사이로 입력하세요.')
+      await alert('발급 수량은 1~100 사이로 입력하세요.', '입력 오류')
       return
     }
-    if (!confirm(`${issueQty}건의 쿠폰을 발급하시겠습니까?`)) return
+    const ok = await confirm({
+      title: '쿠폰 발급',
+      description: `${issueQty}건의 쿠폰을 발급하시겠습니까?`,
+    })
+    if (!ok) return
     issueMutation.mutate({ couponId: selectedCouponId, issueQty, memo })
   }
 

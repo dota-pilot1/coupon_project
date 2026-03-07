@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useConfirmDialog } from '@/components/ConfirmDialog'
 
 type CodeGroup = {
   groupCd: string
@@ -22,6 +23,7 @@ type CodeDetailRow = {
 
 export default function CommonCodePage() {
   const queryClient = useQueryClient()
+  const { confirm, alert } = useConfirmDialog()
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
   const [groupForm, setGroupForm] = useState({
     groupCd: '',
@@ -119,17 +121,22 @@ export default function CommonCodePage() {
     setSelectedDetailRows(new Set())
   }
 
-  const handleSaveGroup = () => {
+  const handleSaveGroup = async () => {
     if (!groupForm.groupCd || !groupForm.groupNm) {
-      alert('그룹코드와 그룹명은 필수입니다.')
+      await alert('그룹코드와 그룹명은 필수입니다.', '입력 오류')
       return
     }
     groupSaveMutation.mutate(groupForm)
   }
 
-  const handleDeleteGroup = () => {
+  const handleDeleteGroup = async () => {
     if (!selectedGroup) return
-    if (!confirm(`'${selectedGroup}' 그룹을 삭제하시겠습니까?\n하위 상세코드도 함께 삭제됩니다.`)) return
+    const ok = await confirm({
+      title: '그룹 삭제',
+      description: `'${selectedGroup}' 그룹을 삭제하시겠습니까?\n하위 상세코드도 함께 삭제됩니다.`,
+      confirmText: '삭제',
+    })
+    if (!ok) return
     groupDeleteMutation.mutate(selectedGroup)
   }
 
@@ -145,14 +152,14 @@ export default function CommonCodePage() {
   }
 
   // 상세코드 일괄 저장
-  const handleSaveDetails = () => {
+  const handleSaveDetails = async () => {
     if (!selectedGroup) {
-      alert('그룹을 먼저 선택/저장하세요.')
+      await alert('그룹을 먼저 선택/저장하세요.', '안내')
       return
     }
     const invalid = details.find((d) => !d.detailCd || !d.detailNm)
     if (invalid) {
-      alert('상세코드와 상세명은 필수입니다.')
+      await alert('상세코드와 상세명은 필수입니다.', '입력 오류')
       return
     }
     detailSaveMutation.mutate({ groupCd: selectedGroup, details })

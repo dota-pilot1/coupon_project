@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import ConditionGrids from './ConditionGrids'
+import { useConfirmDialog } from '@/components/ConfirmDialog'
 
 type Shop = { id: string; name: string }
 
@@ -22,6 +23,7 @@ type Props = {
 const MAX_TABS = 10
 
 export default function ShopTabs({ conditions, onChange }: Props) {
+  const { confirm, alert } = useConfirmDialog()
   const [activeTab, setActiveTab] = useState(0)
   const [showShopPopup, setShowShopPopup] = useState(false)
 
@@ -30,13 +32,13 @@ export default function ShopTabs({ conditions, onChange }: Props) {
     queryFn: () => fetch('/api/shops').then((r) => r.json()),
   })
 
-  const addShopTab = (shop: Shop) => {
+  const addShopTab = async (shop: Shop) => {
     if (conditions.find((c) => c.shopId === shop.id)) {
-      alert('이미 추가된 점포입니다.')
+      await alert('이미 추가된 점포입니다.', '안내')
       return
     }
     if (conditions.length >= MAX_TABS) {
-      alert(`점포는 최대 ${MAX_TABS}개까지 추가 가능합니다.`)
+      await alert(`점포는 최대 ${MAX_TABS}개까지 추가 가능합니다.`, '안내')
       return
     }
     const newConditions = [
@@ -48,8 +50,13 @@ export default function ShopTabs({ conditions, onChange }: Props) {
     setShowShopPopup(false)
   }
 
-  const removeShopTab = (index: number) => {
-    if (!confirm(`"${conditions[index].shopName}" 점포 조건을 삭제하시겠습니까?`)) return
+  const removeShopTab = async (index: number) => {
+    const ok = await confirm({
+      title: '점포 삭제',
+      description: `"${conditions[index].shopName}" 점포 조건을 삭제하시겠습니까?`,
+      confirmText: '삭제',
+    })
+    if (!ok) return
     const newConditions = conditions.filter((_, i) => i !== index)
     onChange(newConditions)
     if (activeTab >= newConditions.length) {
