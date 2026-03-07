@@ -82,20 +82,36 @@ export default function ApprovalPage() {
       <div className="flex gap-4">
         {/* 좌측: 목록 */}
         <div className="w-[35%] min-w-[280px] bg-white rounded border">
-          <div className="flex items-center justify-between p-3 border-b bg-gray-50">
-            <span className="font-medium text-sm">쿠폰 목록 ({filtered.length}건)</span>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="border rounded px-2 py-0.5 text-xs"
-            >
-              <option value="ALL">전체</option>
-              <option value="C">생성</option>
-              <option value="W">승인요청</option>
-              <option value="Y">승인</option>
-              <option value="R">반려</option>
-              <option value="T">강제중지</option>
-            </select>
+          <div className="p-3 border-b bg-gray-50">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-medium text-sm">쿠폰 목록 ({filtered.length}건)</span>
+            </div>
+            <div className="flex gap-1 flex-wrap">
+              {[
+                { value: 'ALL', label: '전체', color: 'bg-gray-600 text-white', inactive: 'bg-gray-100 text-gray-600' },
+                { value: 'C', label: '생성', color: 'bg-gray-500 text-white', inactive: 'bg-gray-100 text-gray-500' },
+                { value: 'W', label: '승인요청', color: 'bg-yellow-500 text-white', inactive: 'bg-yellow-50 text-yellow-700' },
+                { value: 'Y', label: '승인', color: 'bg-green-600 text-white', inactive: 'bg-green-50 text-green-700' },
+                { value: 'R', label: '반려', color: 'bg-red-500 text-white', inactive: 'bg-red-50 text-red-700' },
+                { value: 'T', label: '중지', color: 'bg-gray-700 text-white', inactive: 'bg-gray-200 text-gray-500' },
+              ].map((btn) => {
+                const isActive = filterStatus === btn.value
+                const count = btn.value === 'ALL'
+                  ? coupons.length
+                  : coupons.filter((c) => c.apprvCd === btn.value).length
+                return (
+                  <button
+                    key={btn.value}
+                    onClick={() => setFilterStatus(btn.value)}
+                    className={`px-2.5 py-1 text-xs rounded transition-colors ${
+                      isActive ? btn.color : `${btn.inactive} hover:opacity-80`
+                    }`}
+                  >
+                    {btn.label} {count > 0 && <span className="font-mono">({count})</span>}
+                  </button>
+                )
+              })}
+            </div>
           </div>
           <div className="max-h-[600px] overflow-y-auto">
             {filtered.map((c) => {
