@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import dynamic from 'next/dynamic'
 import { useConfirmDialog } from '@/components/ConfirmDialog'
+import { toast } from 'sonner'
 import type { ColumnDefinition } from '@/components/SimpleTabulator'
 
 const SimpleTabulator = dynamic(() => import('@/components/SimpleTabulator'), { ssr: false })
@@ -111,7 +112,7 @@ export default function ReviewPage() {
         queryClient.invalidateQueries({ queryKey: ['review', Number(newId)] })
       }
       setIsEditing(false)
-      alert('저장되었습니다.', '완료')
+      toast.success('저장되었습니다.')
     },
   })
 
@@ -122,7 +123,7 @@ export default function ReviewPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reviews'] })
       handleNew()
-      alert('삭제되었습니다.', '완료')
+      toast.success('삭제되었습니다.')
     },
   })
 
