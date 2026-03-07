@@ -54,6 +54,37 @@ function seed() {
     { id: 'MENU15', name: '피자', shopId: 'SHOP03', siteId: 'STE05', cornerId: 'CRNR08', price: 14000 },
   ]).run()
 
+  // 공통코드 그룹
+  const now = new Date().toISOString()
+  db.insert(schema.codeGroup).values([
+    { groupCd: 'DC_TYPE', groupNm: '할인유형', description: '쿠폰 할인 유형 코드', useYn: 'Y', createdAt: now, updatedAt: now },
+    { groupCd: 'CPN_STS', groupNm: '쿠폰상태', description: '발급 쿠폰 상태 코드', useYn: 'Y', createdAt: now, updatedAt: now },
+    { groupCd: 'APPRV_CD', groupNm: '승인상태', description: '쿠폰 승인 상태 코드', useYn: 'Y', createdAt: now, updatedAt: now },
+    { groupCd: 'TERM_TYPE', groupNm: '기간제어유형', description: '유효기간 제어 방식', useYn: 'Y', createdAt: now, updatedAt: now },
+  ]).run()
+
+  // 공통코드 상세
+  db.insert(schema.codeDetail).values([
+    // 할인유형
+    { groupCd: 'DC_TYPE', detailCd: 'RATE', detailNm: '정률(%)', sortOrder: 1, useYn: 'Y', createdAt: now, updatedAt: now },
+    { groupCd: 'DC_TYPE', detailCd: 'AMOUNT', detailNm: '정액(원)', sortOrder: 2, useYn: 'Y', createdAt: now, updatedAt: now },
+    // 쿠폰상태
+    { groupCd: 'CPN_STS', detailCd: 'UNUSED', detailNm: '미사용', sortOrder: 1, useYn: 'Y', createdAt: now, updatedAt: now },
+    { groupCd: 'CPN_STS', detailCd: 'USED', detailNm: '사용완료', sortOrder: 2, useYn: 'Y', createdAt: now, updatedAt: now },
+    { groupCd: 'CPN_STS', detailCd: 'EXPIRED', detailNm: '만료', sortOrder: 3, useYn: 'Y', createdAt: now, updatedAt: now },
+    // 승인상태
+    { groupCd: 'APPRV_CD', detailCd: 'C', detailNm: '생성', sortOrder: 1, useYn: 'Y', createdAt: now, updatedAt: now },
+    { groupCd: 'APPRV_CD', detailCd: 'W', detailNm: '승인요청', sortOrder: 2, useYn: 'Y', createdAt: now, updatedAt: now },
+    { groupCd: 'APPRV_CD', detailCd: 'Y', detailNm: '승인', sortOrder: 3, useYn: 'Y', createdAt: now, updatedAt: now },
+    { groupCd: 'APPRV_CD', detailCd: 'R', detailNm: '반려', sortOrder: 4, useYn: 'Y', createdAt: now, updatedAt: now },
+    { groupCd: 'APPRV_CD', detailCd: 'T', detailNm: '강제중지', sortOrder: 5, useYn: 'Y', createdAt: now, updatedAt: now },
+    // 기간제어유형
+    { groupCd: 'TERM_TYPE', detailCd: '00', detailNm: '일자제어', sortOrder: 1, useYn: 'Y', createdAt: now, updatedAt: now },
+    { groupCd: 'TERM_TYPE', detailCd: '10', detailNm: '시간대제어', sortOrder: 2, useYn: 'Y', createdAt: now, updatedAt: now },
+    { groupCd: 'TERM_TYPE', detailCd: '01', detailNm: '요일제어', sortOrder: 3, useYn: 'Y', createdAt: now, updatedAt: now },
+    { groupCd: 'TERM_TYPE', detailCd: '11', detailNm: '시간대+요일제어', sortOrder: 4, useYn: 'Y', createdAt: now, updatedAt: now },
+  ]).run()
+
   console.log('Seed completed!')
 }
 

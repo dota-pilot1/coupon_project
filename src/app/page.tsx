@@ -87,6 +87,8 @@ export default function Home() {
       discountType: 'RATE',
       discountValue: 0,
       termTypeCd: '00',
+      startDate: '',
+      endDate: '',
     })
     setTimeSlots([])
     setDayOfWeek('0000000')

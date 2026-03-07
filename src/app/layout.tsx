@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
+import Header from "@/components/Header";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "쿠폰 사용제한 관리",
-  description: "쿠폰 사용제한 UI/UX 연습 프로젝트",
+  title: "CJ FNB 쿠폰관리",
+  description: "쿠폰 관리 연습 프로젝트",
 };
 
 export default function RootLayout({
@@ -28,7 +29,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+          <Header />
+          <main className="bg-gray-50 min-h-screen">
+            {children}
+          </main>
+        </Providers>
       </body>
     </html>
   );

@@ -44,6 +44,8 @@ export const couponMaster = sqliteTable('coupon_master', {
   startDate: text('start_date'),
   endDate: text('end_date'),
   termTypeCd: text('term_type_cd').notNull().default('00'), // 00=일자, 10=시간대, 01=요일, 11=시간대+요일
+  apprvCd: text('apprv_cd').notNull().default('C'), // C=생성, W=승인요청, Y=승인, R=반려, T=강제중지
+  apprvDt: text('apprv_dt'),
   useYn: text('use_yn').notNull().default('Y'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
@@ -97,4 +99,51 @@ export const condTime = sqliteTable('cond_time', {
   startTm: text('start_tm'), // HH:MM (시간대용)
   endTm: text('end_tm'),     // HH:MM (시간대용)
   dayOfWeek: text('day_of_week'), // '1111100' 비트맵 (요일용)
+})
+
+// ========================================
+// 쿠폰 발급
+// ========================================
+
+export const couponIssuance = sqliteTable('coupon_issuance', {
+  id: text('id').primaryKey(),
+  couponId: text('coupon_id').notNull().references(() => couponMaster.id),
+  issueQty: integer('issue_qty').notNull(),
+  issueDt: text('issue_dt').notNull(),
+  memo: text('memo'),
+  createdAt: text('created_at').notNull(),
+})
+
+export const couponIssued = sqliteTable('coupon_issued', {
+  id: text('id').primaryKey(),
+  issuanceId: text('issuance_id').notNull().references(() => couponIssuance.id, { onDelete: 'cascade' }),
+  couponId: text('coupon_id').notNull().references(() => couponMaster.id),
+  status: text('status').notNull().default('UNUSED'), // UNUSED | USED | EXPIRED
+  usedAt: text('used_at'),
+  usedShopId: text('used_shop_id'),
+  usedAmount: integer('used_amount'),
+})
+
+// ========================================
+// 공통코드
+// ========================================
+
+export const codeGroup = sqliteTable('code_group', {
+  groupCd: text('group_cd').primaryKey(),
+  groupNm: text('group_nm').notNull(),
+  description: text('description'),
+  useYn: text('use_yn').notNull().default('Y'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const codeDetail = sqliteTable('code_detail', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  groupCd: text('group_cd').notNull().references(() => codeGroup.groupCd, { onDelete: 'cascade' }),
+  detailCd: text('detail_cd').notNull(),
+  detailNm: text('detail_nm').notNull(),
+  sortOrder: integer('sort_order').notNull().default(0),
+  useYn: text('use_yn').notNull().default('Y'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
 })
