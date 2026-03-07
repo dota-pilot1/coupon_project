@@ -141,6 +141,28 @@ export const codeGroup = sqliteTable('code_group', {
   updatedAt: text('updated_at').notNull(),
 })
 
+// ========================================
+// 코드 리뷰 게시판
+// ========================================
+
+export const reviewPost = sqliteTable('review_post', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  category: text('category').notNull().default('COMMON'), // COUPON_MASTER | APPROVAL | ISSUANCE | USAGE | COMMON
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  author: text('author').notNull().default('admin'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const reviewComment = sqliteTable('review_comment', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  postId: integer('post_id').notNull().references(() => reviewPost.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  author: text('author').notNull().default('admin'),
+  createdAt: text('created_at').notNull(),
+})
+
 export const codeDetail = sqliteTable('code_detail', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   groupCd: text('group_cd').notNull().references(() => codeGroup.groupCd, { onDelete: 'cascade' }),

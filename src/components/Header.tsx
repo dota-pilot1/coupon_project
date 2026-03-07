@@ -116,6 +116,16 @@ export default function Header() {
           <nav className="flex gap-1">
             <Dropdown menu={PROTO_MENU} pathname={pathname} color="bg-blue-600 text-white" />
             <Dropdown menu={REAL_MENU} pathname={pathname} color="bg-emerald-600 text-white" />
+            <Link
+              href="/review"
+              className={`flex items-center px-4 py-2 text-sm rounded-t transition-colors ${
+                pathname.startsWith('/review')
+                  ? 'bg-amber-600 text-white font-medium'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              코드 리뷰
+            </Link>
           </nav>
         </div>
 
