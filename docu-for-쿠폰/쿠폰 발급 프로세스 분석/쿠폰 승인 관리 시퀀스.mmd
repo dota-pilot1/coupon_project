@@ -1,0 +1,61 @@
+%% 쿠폰 마스터 승인 관리 - 버튼별 동작 시퀀스
+%% 각 버튼 클릭 시 프론트 → 백엔드 흐름
+
+sequenceDiagram
+    participant 등록자
+    participant 승인자
+    participant Front as 프론트엔드<br/>(CponMstAprvMngTobe)
+    participant API as 백엔드 API<br/>(/api/base/cpnmng/v1.0/update)
+    participant DB as DB<br/>(FSCPS.TB_CPN_MST)
+
+    Note over 등록자, DB: ━━━ 1. 승인요청 (C/Q → W) ━━━
+    등록자->>Front: [승인요청] 버튼 클릭
+    Front->>Front: confirm("승인요청 하시겠습니까?")
+    등록자->>Front: 확인
+    Front->>API: POST /update<br/>{cpnApprvCd: "W"}
+    API->>DB: UPDATE TB_CPN_MST<br/>SET CPN_APPRV_CD = 'W'
+    DB-->>API: OK
+    API-->>Front: 성공
+    Front->>Front: alert("승인요청 되었습니다")
+    Front->>API: 목록 재조회
+
+    Note over 등록자, DB: ━━━ 2. 요청취소 (W → Q) ━━━
+    등록자->>Front: [요청취소] 버튼 클릭
+    Front->>Front: confirm("승인요청을 취소하시겠습니까?")
+    등록자->>Front: 확인
+    Front->>API: POST /update<br/>{cpnApprvCd: "Q"}
+    API->>DB: UPDATE TB_CPN_MST<br/>SET CPN_APPRV_CD = 'Q'
+    DB-->>API: OK
+    API-->>Front: 성공
+    Front->>Front: alert("승인요청이 취소되었습니다")
+
+    Note over 승인자, DB: ━━━ 3. 승인 (W → Y) ━━━
+    승인자->>Front: [승인] 버튼 클릭
+    Front->>Front: confirm("승인 처리하시겠습니까?")
+    승인자->>Front: 확인
+    Front->>API: POST /update<br/>{cpnApprvCd: "Y", cpnPsbtYn: "Y",<br/>cpnApprvId: 로그인사용자}
+    API->>DB: UPDATE TB_CPN_MST<br/>SET CPN_APPRV_CD = 'Y',<br/>CPN_PSBT_YN = 'Y',<br/>CPN_APPRV_ID = 승인자ID
+    DB-->>API: OK
+    API-->>Front: 성공
+    Front->>Front: alert("승인 처리되었습니다")
+
+    Note over 승인자, DB: ━━━ 4. 반려 (W → R) ━━━
+    승인자->>Front: [반려] 버튼 클릭
+    Front->>Front: confirm("반려 처리하시겠습니까?")
+    승인자->>Front: 확인
+    Front->>API: POST /update<br/>{cpnApprvCd: "R"}
+    API->>DB: UPDATE TB_CPN_MST<br/>SET CPN_APPRV_CD = 'R'
+    DB-->>API: OK
+    API-->>Front: 성공
+    Front->>Front: alert("반려 처리되었습니다")
+
+    Note over 승인자, DB: ━━━ 5. 강제중지 (Y → T) ━━━
+    승인자->>Front: [강제중지] 버튼 클릭
+    Front->>Front: confirm("강제중지 하시겠습니까?<br/>발행된 쿠폰이 모두 사용 불가 처리됩니다.")
+    승인자->>Front: 확인
+    Front->>API: POST /update<br/>{cpnApprvCd: "T", cpnPsbtYn: "N"}
+    API->>DB: UPDATE TB_CPN_MST<br/>SET CPN_APPRV_CD = 'T',<br/>CPN_PSBT_YN = 'N'
+    Note right of DB: ⚠️ 발행쿠폰 일괄<br/>사용불가 처리 필요<br/>(미구현)
+    DB-->>API: OK
+    API-->>Front: 성공
+    Front->>Front: alert("강제중지 처리되었습니다")

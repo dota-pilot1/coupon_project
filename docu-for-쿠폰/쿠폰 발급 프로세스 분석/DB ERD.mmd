@@ -1,0 +1,130 @@
+%% 쿠폰 관리 DB 테이블 관계도
+
+erDiagram
+    COUPON_MASTER ||--o{ COND_SHOP : "사용 제한"
+    COUPON_MASTER ||--o{ COND_TIME : "기간 조건"
+    COUPON_MASTER ||--o{ COUPON_ISSUANCE : "발급"
+
+    COND_SHOP ||--o{ COND_SITE : "하위"
+    COND_SITE ||--o{ COND_CORNER : "하위"
+    COND_CORNER ||--o{ COND_MENU : "하위"
+
+    COUPON_ISSUANCE ||--o{ COUPON_ISSUED : "개별 쿠폰"
+
+    SHOPS ||--o{ SITES : "보유"
+    SHOPS ||--o{ CORNERS : "보유"
+    SITES ||--o{ CORNERS : "보유"
+    CORNERS ||--o{ MENUS : "보유"
+
+    CODE_GROUP ||--o{ CODE_DETAIL : "상세"
+
+    COUPON_MASTER {
+        text id PK "쿠폰ID"
+        text name "쿠폰명"
+        text discount_type "할인유형 (RATE/AMOUNT)"
+        int discount_value "할인값"
+        text start_date "시작일"
+        text end_date "종료일"
+        text term_type_cd "기간제어유형"
+        text apprv_cd "승인상태 (C/W/Y/R/T)"
+        text apprv_dt "승인일시"
+        text use_yn "사용여부"
+    }
+
+    COND_SHOP {
+        int id PK
+        text coupon_id FK "쿠폰ID"
+        text shop_id FK "점포ID"
+    }
+
+    COND_SITE {
+        int id PK
+        text coupon_id FK
+        text cond_shop_id FK "상위 점포ID"
+        text site_id FK "사이트ID"
+    }
+
+    COND_CORNER {
+        int id PK
+        text coupon_id FK
+        text cond_shop_id FK
+        text cond_site_id FK "상위 사이트ID"
+        text corner_id FK "코너ID"
+    }
+
+    COND_MENU {
+        int id PK
+        text coupon_id FK
+        text cond_shop_id FK
+        text cond_site_id FK
+        text cond_corner_id FK "상위 코너ID"
+        text menu_id FK "메뉴ID"
+    }
+
+    COND_TIME {
+        int id PK
+        text coupon_id FK
+        text time_cond_cd "1=시간대 2=요일"
+        text start_tm "시작시간"
+        text end_tm "종료시간"
+        text day_of_week "요일비트맵 1111100"
+    }
+
+    COUPON_ISSUANCE {
+        text id PK "발급ID"
+        text coupon_id FK "쿠폰ID"
+        int issue_qty "발급수량"
+        text issue_dt "발급일"
+        text memo "메모"
+    }
+
+    COUPON_ISSUED {
+        text id PK "쿠폰번호"
+        text issuance_id FK "발급ID"
+        text coupon_id FK "쿠폰ID"
+        text status "UNUSED/USED/EXPIRED"
+        text used_at "사용일시"
+        text used_shop_id "사용점포"
+        int used_amount "사용금액"
+    }
+
+    SHOPS {
+        text id PK
+        text name "점포명"
+    }
+
+    SITES {
+        text id PK
+        text name "사이트명"
+        text shop_id FK
+    }
+
+    CORNERS {
+        text id PK
+        text name "코너명"
+        text shop_id FK
+        text site_id FK
+    }
+
+    MENUS {
+        text id PK
+        text name "메뉴명"
+        text shop_id FK
+        text site_id FK
+        text corner_id FK
+        int price "가격"
+    }
+
+    CODE_GROUP {
+        text group_cd PK "그룹코드"
+        text group_nm "그룹명"
+        text use_yn "사용여부"
+    }
+
+    CODE_DETAIL {
+        int id PK
+        text group_cd FK "그룹코드"
+        text detail_cd "상세코드"
+        text detail_nm "상세명"
+        int sort_order "정렬순서"
+    }

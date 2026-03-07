@@ -1,0 +1,38 @@
+%% 쿠폰 사용 대상 제한 - 계층 FK 구조
+%% 점포 → 사이트 → 코너 → 메뉴
+
+flowchart TD
+    CPN[쿠폰 마스터<br/>test_coupon1 / 10% 할인]
+
+    CPN --> CS1[cond_shop<br/>인천공항T1점]
+    CPN --> CS2[cond_shop<br/>강남역점]
+
+    CS1 --> CT1[cond_site<br/>1층 푸드코트]
+    CS1 --> CT2[cond_site<br/>2층 푸드코트]
+
+    CS2 --> CT3[cond_site<br/>B1 푸드홀]
+
+    CT1 --> CC1[cond_corner<br/>한식코너]
+    CT1 --> CC2[cond_corner<br/>양식코너]
+
+    CT2 --> CC3[cond_corner<br/>일식코너]
+
+    CT3 --> CC4[cond_corner<br/>중식코너]
+
+    CC1 --> CM1[cond_menu<br/>비빔밥 9,000원]
+    CC1 --> CM2[cond_menu<br/>김치찌개 8,000원]
+    CC2 --> CM3[cond_menu<br/>파스타 12,000원]
+
+    style CPN fill:#dbeafe,stroke:#3b82f6,color:#1e40af,stroke-width:2px
+    style CS1 fill:#fef3c7,stroke:#f59e0b
+    style CS2 fill:#fef3c7,stroke:#f59e0b
+    style CT1 fill:#d1fae5,stroke:#10b981
+    style CT2 fill:#d1fae5,stroke:#10b981
+    style CT3 fill:#d1fae5,stroke:#10b981
+    style CC1 fill:#fce7f3,stroke:#ec4899
+    style CC2 fill:#fce7f3,stroke:#ec4899
+    style CC3 fill:#fce7f3,stroke:#ec4899
+    style CC4 fill:#fce7f3,stroke:#ec4899
+    style CM1 fill:#f3e8ff,stroke:#a855f7
+    style CM2 fill:#f3e8ff,stroke:#a855f7
+    style CM3 fill:#f3e8ff,stroke:#a855f7

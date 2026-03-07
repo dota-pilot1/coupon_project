@@ -1,0 +1,49 @@
+%% 쿠폰 발급 → 사용 → 현황 시퀀스
+
+sequenceDiagram
+    actor 담당자
+    participant 발급화면 as 쿠폰 발급<br/>(/issuance)
+    participant API as API<br/>(/api/issuances)
+    participant DB as Database
+    participant POS as 매장 POS
+    participant 현황 as 사용 현황<br/>(/usage)
+
+    Note over 담당자, DB: ━━━ 발급 프로세스 ━━━
+
+    담당자->>발급화면: 승인된 쿠폰 선택 + 수량(N) 입력
+    발급화면->>API: POST /api/issuances<br/>{couponId, issueQty, memo}
+
+    API->>DB: SELECT coupon_master<br/>WHERE apprvCd = 'Y' 확인
+    DB-->>API: 승인 확인 OK
+
+    API->>DB: INSERT coupon_issuance<br/>(발급 마스터 1건)
+
+    loop N건 반복
+        API->>DB: INSERT coupon_issued<br/>(쿠폰번호 생성, status='UNUSED')
+    end
+
+    DB-->>API: 완료
+    API-->>발급화면: {issuanceId, coupons: [...N건]}
+    발급화면-->>담당자: 쿠폰번호 목록 표시
+
+    Note over POS, DB: ━━━ 사용 프로세스 ━━━
+
+    POS->>DB: 쿠폰번호로 조회
+    DB-->>POS: 쿠폰 정보 (할인유형/값, 유효기간)
+
+    POS->>POS: 유효성 검증<br/>- 상태 = UNUSED?<br/>- 유효기간 내?<br/>- 사용 대상 점포/메뉴?
+
+    alt 유효한 쿠폰
+        POS->>DB: UPDATE coupon_issued<br/>SET status='USED',<br/>used_at, used_shop_id, used_amount
+        DB-->>POS: OK
+        POS-->>POS: 할인 적용
+    else 무효한 쿠폰
+        POS-->>POS: 사용 불가 안내
+    end
+
+    Note over 담당자, 현황: ━━━ 현황 조회 ━━━
+
+    담당자->>현황: 사용 현황 페이지 접속
+    현황->>DB: 통계 집계 쿼리<br/>COUNT(*), SUM(CASE status...)
+    DB-->>현황: {총발급, 사용, 미사용, 만료, 사용률}
+    현황-->>담당자: 통계 카드 + 쿠폰별 집계 + 상세 목록

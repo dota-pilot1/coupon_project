@@ -1,0 +1,41 @@
+%% 쿠폰 관리 전체 프로세스 (저장 → 승인 → 발급 → 사용)
+
+flowchart LR
+    subgraph STEP1["1단계: 등록"]
+        A1[쿠폰 마스터 등록] --> A2[할인유형/값 설정]
+        A2 --> A3[사용 대상 제한\n점포→사이트→코너→메뉴]
+        A3 --> A4[유효 기간 설정\n일자/시간대/요일]
+        A4 --> A5[저장]
+    end
+
+    subgraph STEP2["2단계: 승인"]
+        B1[승인요청\nC → W] --> B2{승인자 검토}
+        B2 -->|승인| B3[승인완료\nW → Y]
+        B2 -->|반려| B4[반려\nW → R]
+        B4 -->|수정 후| B1
+        B3 -->|긴급| B5[강제중지\nY → T]
+    end
+
+    subgraph STEP3["3단계: 발급"]
+        C1[승인된 쿠폰 선택] --> C2[발급 수량 입력]
+        C2 --> C3[발급 실행]
+        C3 --> C4[개별 쿠폰번호\nN건 생성]
+    end
+
+    subgraph STEP4["4단계: 사용/현황"]
+        D1[매장 POS 사용] --> D2[UNUSED → USED]
+        D2 --> D3[사용 이력 기록\n일시/점포/금액]
+        D4[기간 만료] --> D5[UNUSED → EXPIRED]
+        D3 --> D6[통계 대시보드]
+        D5 --> D6
+    end
+
+    A5 --> B1
+    B3 --> C1
+    C4 --> D1
+    C4 --> D4
+
+    style STEP1 fill:#f0f9ff,stroke:#3b82f6
+    style STEP2 fill:#fefce8,stroke:#eab308
+    style STEP3 fill:#f0fdf4,stroke:#22c55e
+    style STEP4 fill:#faf5ff,stroke:#a855f7

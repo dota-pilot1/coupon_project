@@ -1,0 +1,31 @@
+%% 개별 발급 쿠폰(coupon_issued)의 상태 전이
+%% 쿠폰 마스터 승인상태(C/W/Y/R/T)와 별개
+
+stateDiagram-v2
+    [*] --> UNUSED: 쿠폰 발급 시 생성
+
+    state "UNUSED (미사용)" as UNUSED
+    state "USED (사용완료)" as USED
+    state "EXPIRED (만료)" as EXPIRED
+
+    UNUSED --> USED: 매장 POS에서 사용
+    UNUSED --> EXPIRED: 유효기간 만료
+
+    USED --> [*]: 종료
+    EXPIRED --> [*]: 종료
+
+    note right of UNUSED
+        검증 항목:
+        - 유효기간 (start_date ~ end_date)
+        - 시간대 조건 (cond_time CD=1)
+        - 요일 조건 (cond_time CD=2)
+        - 사용 가능 점포/메뉴 (cond_shop~menu)
+        - 쿠폰 마스터 apprvCd = Y (강제중지 아닌지)
+    end note
+
+    note right of USED
+        기록 항목:
+        - used_at (사용일시)
+        - used_shop_id (사용점포)
+        - used_amount (사용금액)
+    end note
