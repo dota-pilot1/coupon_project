@@ -54,3 +54,49 @@
       ).then((r) => r.json()),
     enabled: !!selectedSite && !!selectedCorner,
   })
+
+3.
+클릭 → 상태 변경 → 리렌더 → 필터링 재계산
+
+사이트/코너 클릭 시 API 재조회가 아니라 로컬 필터링으로 그리드를 갱신함
+React의 기본 동작: setState → 컴포넌트 함수 전체 재실행 → 파생값 새로 계산
+
+  // 사이트 클릭
+  onClick={() => {
+    setSelectedSite(site.id === selectedSite ? null : site.id)  // ← state 변경
+    setSelectedCorner(null)
+  }}
+
+  // 리렌더 시 이 줄들이 새로 계산됨 (저장된 값이 아님)
+  const filteredCorners = selectedSite
+    ? condition.corners.filter((c) => c.siteId === selectedSite)
+    : condition.corners
+
+  const filteredMenus = selectedCorner
+    ? condition.menus.filter((m) => m.cornerId === selectedCorner)
+    : selectedSite
+    ? condition.menus.filter((m) => m.siteId === selectedSite)
+    : condition.menus
+
+흐름:
+  클릭 → setSelectedSite('STE01') → 리렌더
+    → filteredCorners = condition.corners.filter(c => c.siteId === 'STE01')
+    → 화면에 해당 코너만 표시
+
+4.
+첫 번째 점포 기본 선택 과정
+
+ShopTabs (탭 UI):
+  const [activeTab, setActiveTab] = useState(0)  ← 초기값 0 = 첫 번째 점포
+  → conditions[0] 의 ConditionGrids 가 렌더됨
+
+ConditionGrids (사이트 자동 선택):
+  useEffect(() => {
+    setSelectedSite(condition.sites[0]?.id ?? null)  ← 첫 번째 사이트 자동 선택
+    setSelectedCorner(null)
+  }, [condition.shopId])  ← 점포 탭 전환 시마다 실행
+
+결과:
+  점포 탭 클릭 → activeTab 변경 → 해당 점포의 ConditionGrids 렌더
+    → useEffect 실행 → 첫 번째 사이트 자동 선택 (파란 배경)
+    → 해당 사이트의 코너 목록 바로 표시
