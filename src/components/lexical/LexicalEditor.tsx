@@ -9,6 +9,7 @@ import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin'
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin'
 import { ListPlugin } from '@lexical/react/LexicalListPlugin'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
+import { registerCodeHighlighting } from '@lexical/code'
 import { HeadingNode } from '@lexical/rich-text'
 import { ListNode, ListItemNode } from '@lexical/list'
 import { CodeNode, CodeHighlightNode } from '@lexical/code'
@@ -26,6 +27,12 @@ interface LexicalEditorProps {
   onChange: (state: string) => void
   placeholder?: string
   minHeight?: string
+}
+
+function CodeHighlightPlugin() {
+  const [editor] = useLexicalComposerContext()
+  useEffect(() => registerCodeHighlighting(editor), [editor])
+  return null
 }
 
 function InitialContentPlugin({ initialState }: { initialState?: string }) {
@@ -104,6 +111,7 @@ export function LexicalEditor({
         </div>
         <HistoryPlugin />
         <ListPlugin />
+        <CodeHighlightPlugin />
         <OnChangePlugin onChange={handleChange} />
         <InitialContentPlugin initialState={initialState} />
       </div>
