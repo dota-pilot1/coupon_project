@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
+import { ConditionSummaryCard } from '@/components/ConditionSummaryCard'
 
 const ShopTabs = dynamic(() => import('@/components/ShopTabs'), { ssr: false })
 
@@ -86,40 +87,9 @@ export default function UsageTargetSamplePage() {
 
       {/* 조건 요약 카드 */}
       {conditions.length > 0 && (
-        <div className="mt-4 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
+        <div className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
           {conditions.map((cond) => (
-            <div key={cond.shopId} className="bg-white rounded border p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">{cond.shopId}</span>
-                <span className="font-medium text-sm">{cond.shopName}</span>
-              </div>
-              <div className="space-y-1 text-xs text-gray-600">
-                <div className="flex gap-2">
-                  <span className="w-12 text-gray-400">사이트</span>
-                  {cond.sites.length > 0 ? (
-                    <span>{cond.sites.map((s) => s.name).join(', ')}</span>
-                  ) : (
-                    <span className="text-gray-300">미설정</span>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <span className="w-12 text-gray-400">코너</span>
-                  {cond.corners.length > 0 ? (
-                    <span>{cond.corners.map((c) => c.name).join(', ')}</span>
-                  ) : (
-                    <span className="text-gray-300">미설정</span>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <span className="w-12 text-gray-400">메뉴</span>
-                  {cond.menus.length > 0 ? (
-                    <span>{cond.menus.map((m) => m.name).join(', ')}</span>
-                  ) : (
-                    <span className="text-gray-300">미설정</span>
-                  )}
-                </div>
-              </div>
-            </div>
+            <ConditionSummaryCard key={cond.shopId} condition={cond} />
           ))}
         </div>
       )}
