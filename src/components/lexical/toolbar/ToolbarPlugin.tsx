@@ -1,5 +1,6 @@
 import { TextFormatButtons } from './TextFormatButtons'
 import { BlockTypeButtons } from './BlockTypeButtons'
+import { CodeBlockButton } from './CodeBlockButton'
 
 export function ToolbarPlugin() {
   return (
@@ -7,6 +8,8 @@ export function ToolbarPlugin() {
       <TextFormatButtons />
       <span className="w-px h-4 bg-gray-300 mx-1" />
       <BlockTypeButtons />
+      <span className="w-px h-4 bg-gray-300 mx-1" />
+      <CodeBlockButton />
     </div>
   )
 }

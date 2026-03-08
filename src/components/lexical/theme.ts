@@ -21,4 +21,5 @@ export const editorTheme: EditorThemeClasses = {
       listitem: 'list-none',
     },
   },
+  code: 'block bg-gray-900 text-gray-100 font-mono text-sm p-4 rounded my-2 overflow-x-auto whitespace-pre',
 }

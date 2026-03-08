@@ -11,6 +11,7 @@ import { ListPlugin } from '@lexical/react/LexicalListPlugin'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { HeadingNode } from '@lexical/rich-text'
 import { ListNode, ListItemNode } from '@lexical/list'
+import { CodeNode, CodeHighlightNode } from '@lexical/code'
 import {
   $createParagraphNode,
   $createTextNode,
@@ -77,7 +78,7 @@ export function LexicalEditor({
   const initialConfig = {
     namespace: 'ReviewEditor',
     theme: editorTheme,
-    nodes: [HeadingNode, ListNode, ListItemNode],
+    nodes: [HeadingNode, ListNode, ListItemNode, CodeNode, CodeHighlightNode],
     onError: (error: Error) => console.error('Lexical error:', error),
   }
 
