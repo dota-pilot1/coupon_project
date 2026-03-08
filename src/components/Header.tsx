@@ -157,6 +157,16 @@ export default function Header() {
             >
               프론트엔드
             </Link>
+            <Link
+              href="/docs"
+              className={`flex items-center px-4 py-2 text-sm rounded-t transition-colors ${
+                pathname.startsWith('/docs')
+                  ? 'bg-teal-600 text-white font-medium'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              문서 관리
+            </Link>
           </nav>
         </div>
 

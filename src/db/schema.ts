@@ -293,3 +293,28 @@ export const frontendStep = sqliteTable('frontend_step', {
   title: text('title'),
   content: text('content').notNull().default(''),
 })
+
+// ========================================
+// 문서 관리
+// ========================================
+
+export const docFolder = sqliteTable('doc_folder', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  parentId: integer('parent_id'), // null = 최상위 폴더
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const docPost = sqliteTable('doc_post', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  folderId: integer('folder_id').notNull().references(() => docFolder.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  content: text('content').notNull().default(''),
+  contentType: text('content_type').notNull().default('MD'), // MD | MMD
+  author: text('author').notNull().default('admin'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
