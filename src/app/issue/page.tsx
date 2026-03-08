@@ -782,7 +782,7 @@ export default function IssuePage() {
                       type="text"
                       value={checkInput}
                       onChange={(e) => setCheckInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddCheck() }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleAddCheck() }}
                       placeholder="체크리스트 항목 입력 후 Enter 또는 추가"
                       className="flex-1 border rounded px-2 py-1 text-sm"
                     />
