@@ -262,3 +262,34 @@ export const codeDetail = sqliteTable('code_detail', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 })
+
+// ========================================
+// 프론트엔드 (컴포넌트 제작 공유)
+// ========================================
+
+export const frontendPost = sqliteTable('frontend_post', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  category: text('category').notNull().default('COMMON'),
+  title: text('title').notNull(),
+  content: text('content').notNull().default(''),
+  author: text('author').notNull().default('admin'),
+  mmdContent: text('mmd_content'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const frontendComment = sqliteTable('frontend_comment', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  postId: integer('post_id').notNull().references(() => frontendPost.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  author: text('author').notNull().default('admin'),
+  createdAt: text('created_at').notNull(),
+})
+
+export const frontendStep = sqliteTable('frontend_step', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  postId: integer('post_id').notNull().references(() => frontendPost.id, { onDelete: 'cascade' }),
+  stepOrder: integer('step_order').notNull(),
+  title: text('title'),
+  content: text('content').notNull().default(''),
+})
