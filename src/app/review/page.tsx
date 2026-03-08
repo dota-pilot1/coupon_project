@@ -9,6 +9,14 @@ import type { ColumnDefinition } from '@/components/SimpleTabulator'
 
 const SimpleTabulator = dynamic(() => import('@/components/SimpleTabulator'), { ssr: false })
 const MermaidChart = dynamic(() => import('@/components/MermaidChart'), { ssr: false })
+const LexicalEditor = dynamic(
+  () => import('@/components/lexical/LexicalEditor').then((m) => ({ default: m.LexicalEditor })),
+  { ssr: false }
+)
+const LexicalViewer = dynamic(
+  () => import('@/components/lexical/LexicalViewer').then((m) => ({ default: m.LexicalViewer })),
+  { ssr: false }
+)
 
 type Post = {
   id: number
@@ -382,13 +390,15 @@ export default function ReviewPage() {
                         </button>
                       )}
                     </div>
-                    <textarea
-                      value={step.content}
-                      onChange={(e) => setFormSteps((prev) => prev.map((s, i) => i === idx ? { ...s, content: e.target.value } : s))}
-                      rows={4}
-                      className="w-full px-3 py-2 text-sm border-0 resize-y focus:outline-none"
-                      placeholder="이 단계의 내용을 입력하세요"
-                    />
+                    <div className="border-t">
+                      <LexicalEditor
+                        key={`step-${idx}`}
+                        initialState={step.content}
+                        onChange={(val) => setFormSteps((prev) => prev.map((s, i) => i === idx ? { ...s, content: val } : s))}
+                        placeholder="이 단계의 내용을 입력하세요"
+                        minHeight="100px"
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -458,7 +468,9 @@ export default function ReviewPage() {
                           <span className="text-xs font-bold text-gray-500">Step {step.stepOrder}</span>
                           {step.title && <span className="text-sm font-medium text-gray-700">{step.title}</span>}
                         </div>
-                        <div className="px-4 py-3 text-sm whitespace-pre-wrap">{step.content}</div>
+                        <div className="px-4 py-3 text-sm">
+                          <LexicalViewer content={step.content} />
+                        </div>
                       </div>
                     ))}
                   </div>
