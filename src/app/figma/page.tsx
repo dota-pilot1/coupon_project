@@ -1,11 +1,15 @@
 'use client'
 
-import { useState, useRef, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import dynamic from 'next/dynamic'
 import { useConfirmDialog } from '@/components/ConfirmDialog'
+import { toast } from 'sonner'
+import type { ColumnDefinition } from '@/components/SimpleTabulator'
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+const SimpleTabulator = dynamic(() => import('@/components/SimpleTabulator'), { ssr: false })
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type FigmaPage = {
   id: number
@@ -50,6 +54,14 @@ const CATEGORIES = [
   { value: 'USAGE', label: '사용현황' },
 ]
 
+const CATEGORY_LABELS: Record<string, string> = {
+  COMMON: '공통',
+  COUPON_MASTER: '쿠폰마스터',
+  APPROVAL: '승인관리',
+  ISSUANCE: '쿠폰발급',
+  USAGE: '사용현황',
+}
+
 const CATEGORY_COLORS: Record<string, string> = {
   COMMON: 'bg-gray-100 text-gray-700',
   COUPON_MASTER: 'bg-blue-100 text-blue-700',
@@ -58,13 +70,13 @@ const CATEGORY_COLORS: Record<string, string> = {
   USAGE: 'bg-purple-100 text-purple-700',
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  COMMON: '공통',
-  COUPON_MASTER: '쿠폰마스터',
-  APPROVAL: '승인관리',
-  ISSUANCE: '쿠폰발급',
-  USAGE: '사용현황',
-}
+const columns: ColumnDefinition[] = [
+  { title: 'No.', field: 'rn', width: 50, hozAlign: 'center', headerSort: false },
+  { title: '카테고리', field: 'categoryLabel', width: 90, hozAlign: 'center' },
+  { title: '제목', field: 'title', minWidth: 120, hozAlign: 'left' },
+  { title: '항목수', field: 'itemCount', width: 60, hozAlign: 'center' },
+  { title: '등록일', field: 'dateDisplay', width: 90, hozAlign: 'center' },
+]
 
 function toEmbedUrl(url: string): string {
   if (!url) return ''
@@ -76,35 +88,35 @@ function toEmbedUrl(url: string): string {
   }
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
-export default function FigmaPage() {
+export default function FigmaManagePage() {
   const queryClient = useQueryClient()
   const { confirm } = useConfirmDialog()
 
-  // ── Filter ──
+  // ─ Filter ─
   const [filterCategory, setFilterCategory] = useState('ALL')
-  const [filterKeyword, setFilterKeyword] = useState('')
+  const [searchKeyword, setSearchKeyword] = useState('')
 
-  // ── Page (좌측 화면 목록) ──
+  // ─ Page 선택/편집 ─
   const [selectedPageId, setSelectedPageId] = useState<number | null>(null)
-  const [pageMode, setPageMode] = useState<'view' | 'create' | 'edit'>('view')
+  const [isEditingPage, setIsEditingPage] = useState(false)   // true = page form open
   const [pageFormCategory, setPageFormCategory] = useState('COMMON')
   const [pageFormTitle, setPageFormTitle] = useState('')
   const [pageFormDescription, setPageFormDescription] = useState('')
 
-  // ── Item (우측 피그마 항목) ──
+  // ─ Item 선택/편집 ─
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null)
-  const [itemMode, setItemMode] = useState<'view' | 'create' | 'edit'>('view')
+  const [isEditingItem, setIsEditingItem] = useState(false)   // true = item form open
   const [itemFormTitle, setItemFormTitle] = useState('')
   const [itemFormFigmaUrl, setItemFormFigmaUrl] = useState('')
   const [itemFormVersion, setItemFormVersion] = useState('')
 
-  // ── Checklist ──
+  // ─ Checklist ─
   const [checkInput, setCheckInput] = useState('')
   const checkInputRef = useRef<HTMLInputElement>(null)
 
-  // ─── Queries ─────────────────────────────────────────────────────────────────
+  // ─── Queries ──────────────────────────────────────────────────────────────────
 
   const { data: pages = [] } = useQuery<FigmaPage[]>({
     queryKey: ['figmaPages'],
@@ -114,7 +126,7 @@ export default function FigmaPage() {
   const { data: pageDetail } = useQuery<FigmaPageDetail>({
     queryKey: ['figmaPage', selectedPageId],
     queryFn: () => fetch(`/api/figma/pages/${selectedPageId}`).then((r) => r.json()),
-    enabled: !!selectedPageId,
+    enabled: !!selectedPageId && !isEditingPage,
   })
 
   // ─── Derived ──────────────────────────────────────────────────────────────────
@@ -122,9 +134,20 @@ export default function FigmaPage() {
   const filteredPages = useMemo(() => {
     let list = pages
     if (filterCategory !== 'ALL') list = list.filter((p) => p.category === filterCategory)
-    if (filterKeyword.trim()) list = list.filter((p) => p.title.includes(filterKeyword.trim()))
+    if (searchKeyword.trim()) list = list.filter((p) => p.title.includes(searchKeyword.trim()))
     return list
-  }, [pages, filterCategory, filterKeyword])
+  }, [pages, filterCategory, searchKeyword])
+
+  const gridData = useMemo(() =>
+    filteredPages.map((p, i) => ({
+      ...p,
+      rn: i + 1,
+      categoryLabel: CATEGORY_LABELS[p.category] ?? p.category,
+      itemCount: '-',
+      dateDisplay: p.createdAt.slice(0, 10),
+    })),
+    [filteredPages]
+  )
 
   const selectedItem = useMemo(
     () => pageDetail?.items.find((i) => i.id === selectedItemId) ?? null,
@@ -150,14 +173,11 @@ export default function FigmaPage() {
     },
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['figmaPages'] })
-      if (variables.id) {
-        queryClient.invalidateQueries({ queryKey: ['figmaPage', variables.id] })
-        toast.success('화면이 수정되었습니다.')
-      } else {
-        setSelectedPageId(result.id)
-        toast.success('화면이 등록되었습니다.')
-      }
-      setPageMode('view')
+      const id = variables.id ?? result.id
+      setSelectedPageId(id)
+      if (variables.id) queryClient.invalidateQueries({ queryKey: ['figmaPage', variables.id] })
+      setIsEditingPage(false)
+      toast.success(variables.id ? '화면이 수정되었습니다.' : '화면이 등록되었습니다.')
     },
     onError: () => toast.error('저장에 실패했습니다.'),
   })
@@ -169,7 +189,7 @@ export default function FigmaPage() {
       queryClient.invalidateQueries({ queryKey: ['figmaPages'] })
       setSelectedPageId(null)
       setSelectedItemId(null)
-      setPageMode('view')
+      setIsEditingPage(false)
       toast.success('화면이 삭제되었습니다.')
     },
     onError: () => toast.error('삭제에 실패했습니다.'),
@@ -178,13 +198,7 @@ export default function FigmaPage() {
   // ─── Item Mutations ───────────────────────────────────────────────────────────
 
   const saveItemMutation = useMutation({
-    mutationFn: (data: {
-      id?: number
-      pageId: number
-      title: string
-      figmaUrl: string
-      version: string
-    }) => {
+    mutationFn: (data: { id?: number; pageId: number; title: string; figmaUrl: string; version: string }) => {
       if (data.id) {
         return fetch(`/api/figma/pages/${data.pageId}/items/${data.id}`, {
           method: 'PUT',
@@ -201,7 +215,7 @@ export default function FigmaPage() {
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['figmaPage', variables.pageId] })
       if (!variables.id) setSelectedItemId(result.id)
-      setItemMode('view')
+      setIsEditingItem(false)
       toast.success(variables.id ? '항목이 수정되었습니다.' : '항목이 등록되었습니다.')
     },
     onError: () => toast.error('저장에 실패했습니다.'),
@@ -213,7 +227,7 @@ export default function FigmaPage() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['figmaPage', variables.pageId] })
       setSelectedItemId(null)
-      setItemMode('view')
+      setIsEditingItem(false)
       toast.success('항목이 삭제되었습니다.')
     },
     onError: () => toast.error('삭제에 실패했습니다.'),
@@ -228,60 +242,43 @@ export default function FigmaPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content }),
       }).then((r) => r.json()),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['figmaPage', variables.pageId] })
+    onSuccess: (_, { pageId }) => {
+      queryClient.invalidateQueries({ queryKey: ['figmaPage', pageId] })
       setCheckInput('')
       checkInputRef.current?.focus()
     },
-    onError: () => toast.error('추가에 실패했습니다.'),
   })
 
   const toggleCheckMutation = useMutation({
-    mutationFn: ({
-      pageId,
-      itemId,
-      checkId,
-      checked,
-    }: {
-      pageId: number
-      itemId: number
-      checkId: number
-      checked: boolean
-    }) =>
+    mutationFn: ({ pageId, itemId, checkId, checked }: { pageId: number; itemId: number; checkId: number; checked: boolean }) =>
       fetch(`/api/figma/pages/${pageId}/items/${itemId}/checklist/${checkId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ checked }),
       }).then((r) => r.json()),
-    onSuccess: (_, variables) =>
-      queryClient.invalidateQueries({ queryKey: ['figmaPage', variables.pageId] }),
-    onError: () => toast.error('업데이트에 실패했습니다.'),
+    onSuccess: (_, { pageId }) => queryClient.invalidateQueries({ queryKey: ['figmaPage', pageId] }),
   })
 
   const deleteCheckMutation = useMutation({
     mutationFn: ({ pageId, itemId, checkId }: { pageId: number; itemId: number; checkId: number }) =>
-      fetch(`/api/figma/pages/${pageId}/items/${itemId}/checklist/${checkId}`, {
-        method: 'DELETE',
-      }).then((r) => r.json()),
-    onSuccess: (_, variables) =>
-      queryClient.invalidateQueries({ queryKey: ['figmaPage', variables.pageId] }),
-    onError: () => toast.error('삭제에 실패했습니다.'),
+      fetch(`/api/figma/pages/${pageId}/items/${itemId}/checklist/${checkId}`, { method: 'DELETE' }).then((r) => r.json()),
+    onSuccess: (_, { pageId }) => queryClient.invalidateQueries({ queryKey: ['figmaPage', pageId] }),
   })
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
 
-  const handleSelectPage = (page: FigmaPage) => {
-    setSelectedPageId(page.id)
+  const handleRowClick = (row: Record<string, unknown>) => {
+    setSelectedPageId(row.id as number)
     setSelectedItemId(null)
-    setPageMode('view')
-    setItemMode('view')
+    setIsEditingPage(false)
+    setIsEditingItem(false)
   }
 
   const handleNewPage = () => {
     setSelectedPageId(null)
     setSelectedItemId(null)
-    setPageMode('create')
-    setItemMode('view')
+    setIsEditingPage(true)
+    setIsEditingItem(false)
     setPageFormCategory('COMMON')
     setPageFormTitle('')
     setPageFormDescription('')
@@ -289,19 +286,17 @@ export default function FigmaPage() {
 
   const handleEditPage = () => {
     if (!pageDetail) return
-    setPageMode('edit')
+    setIsEditingPage(true)
+    setIsEditingItem(false)
     setPageFormCategory(pageDetail.category)
     setPageFormTitle(pageDetail.title)
     setPageFormDescription(pageDetail.description ?? '')
   }
 
   const handleSavePage = () => {
-    if (!pageFormTitle.trim()) {
-      toast.error('제목을 입력하세요.')
-      return
-    }
+    if (!pageFormTitle.trim()) { toast.error('제목을 입력하세요.'); return }
     savePageMutation.mutate({
-      id: pageMode === 'edit' ? selectedPageId! : undefined,
+      id: selectedPageId && isEditingPage ? selectedPageId : undefined,
       category: pageFormCategory,
       title: pageFormTitle,
       description: pageFormDescription.trim() || null,
@@ -310,16 +305,13 @@ export default function FigmaPage() {
 
   const handleDeletePage = async () => {
     if (!selectedPageId) return
-    const ok = await confirm({
-      title: '화면 삭제',
-      description: '이 화면과 모든 피그마 항목이 삭제됩니다. 계속하시겠습니까?',
-    })
+    const ok = await confirm({ title: '화면 삭제', description: '이 화면과 모든 피그마 항목이 함께 삭제됩니다.' })
     if (ok) deletePageMutation.mutate(selectedPageId)
   }
 
   const handleNewItem = () => {
     setSelectedItemId(null)
-    setItemMode('create')
+    setIsEditingItem(true)
     setItemFormTitle('')
     setItemFormFigmaUrl('')
     setItemFormVersion('')
@@ -327,20 +319,17 @@ export default function FigmaPage() {
 
   const handleEditItem = () => {
     if (!selectedItem) return
-    setItemMode('edit')
+    setIsEditingItem(true)
     setItemFormTitle(selectedItem.title)
     setItemFormFigmaUrl(selectedItem.figmaUrl)
     setItemFormVersion(selectedItem.version ?? '')
   }
 
   const handleSaveItem = () => {
-    if (!itemFormTitle.trim() || !itemFormFigmaUrl.trim()) {
-      toast.error('제목과 피그마 URL을 입력하세요.')
-      return
-    }
+    if (!itemFormTitle.trim() || !itemFormFigmaUrl.trim()) { toast.error('제목과 피그마 URL을 입력하세요.'); return }
     if (!selectedPageId) return
     saveItemMutation.mutate({
-      id: itemMode === 'edit' ? selectedItemId! : undefined,
+      id: isEditingItem && selectedItemId ? selectedItemId : undefined,
       pageId: selectedPageId,
       title: itemFormTitle,
       figmaUrl: itemFormFigmaUrl,
@@ -350,10 +339,7 @@ export default function FigmaPage() {
 
   const handleDeleteItem = async () => {
     if (!selectedItemId || !selectedPageId) return
-    const ok = await confirm({
-      title: '항목 삭제',
-      description: '이 피그마 항목과 체크리스트가 삭제됩니다.',
-    })
+    const ok = await confirm({ title: '항목 삭제', description: '이 피그마 항목과 체크리스트가 삭제됩니다.' })
     if (ok) deleteItemMutation.mutate({ pageId: selectedPageId, itemId: selectedItemId })
   }
 
@@ -367,11 +353,20 @@ export default function FigmaPage() {
   const thStyle = 'bg-gray-50 border border-gray-200 px-3 py-2 text-left font-normal text-sm whitespace-nowrap'
   const tdStyle = 'border border-gray-200 px-3 py-1'
 
+  // ─── Determine right panel title ──────────────────────────────────────────────
+
+  const rightTitle = isEditingPage
+    ? selectedPageId ? '화면 수정' : '화면 등록'
+    : isEditingItem
+    ? selectedItemId ? '피그마 항목 수정' : '피그마 항목 등록'
+    : selectedPageId ? '화면 상세' : '피그마 관리'
+
   // ─── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      {/* 상단 검색 바 */}
+
+      {/* 타이틀 + 검색 */}
       <div className="bg-white rounded border mb-4">
         <div className="flex items-center justify-between p-3 border-b bg-gray-50">
           <h1 className="text-lg font-bold">피그마 관리</h1>
@@ -387,20 +382,20 @@ export default function FigmaPage() {
             </select>
             <input
               type="text"
-              value={filterKeyword}
-              onChange={(e) => setFilterKeyword(e.target.value)}
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
               placeholder="화면 제목 검색"
-              className="border rounded px-2 py-1 text-sm w-40"
+              className="border rounded px-2 py-1 text-sm w-36"
             />
           </div>
         </div>
       </div>
 
-      {/* 2단 레이아웃 */}
-      <div className="flex gap-4 items-start">
+      {/* 좌우 분할 */}
+      <div className="flex gap-4">
 
         {/* ── 좌: 화면 목록 ── */}
-        <div className="w-[300px] shrink-0 bg-white rounded border">
+        <div className="w-[45%] min-w-[340px] bg-white rounded border">
           <div className="flex items-center justify-between p-3 border-b bg-gray-50">
             <span className="font-medium text-sm">화면 목록 ({filteredPages.length}건)</span>
             <button
@@ -410,297 +405,150 @@ export default function FigmaPage() {
               신규
             </button>
           </div>
+          <SimpleTabulator
+            columns={columns}
+            data={gridData}
+            height={500}
+            onRowClick={handleRowClick}
+            selectedRowId={selectedPageId}
+            placeholder="화면이 없습니다."
+          />
+        </div>
 
-          <div className="overflow-y-auto" style={{ maxHeight: 600 }}>
-            {filteredPages.length === 0 ? (
-              <div className="p-8 text-center text-sm text-gray-400">화면이 없습니다.</div>
-            ) : (
+        {/* ── 우: 상세 패널 ── */}
+        <div className="flex-1 bg-white rounded border overflow-hidden">
+          <div className="flex items-center justify-between p-3 border-b bg-gray-50">
+            <span className="font-medium text-sm">{rightTitle}</span>
+            <div className="flex gap-1">
+              {isEditingPage ? (
+                <>
+                  <button onClick={handleSavePage} className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700">저장</button>
+                  <button
+                    onClick={() => { setIsEditingPage(false); if (!selectedPageId) setSelectedPageId(null) }}
+                    className="px-3 py-1 text-xs bg-gray-400 text-white rounded hover:bg-gray-500"
+                  >취소</button>
+                </>
+              ) : isEditingItem ? (
+                <>
+                  <button onClick={handleSaveItem} className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700">저장</button>
+                  <button
+                    onClick={() => { setIsEditingItem(false); if (!selectedItemId) setSelectedItemId(null) }}
+                    className="px-3 py-1 text-xs bg-gray-400 text-white rounded hover:bg-gray-500"
+                  >취소</button>
+                </>
+              ) : selectedPageId ? (
+                <>
+                  <button onClick={handleEditPage} className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700">수정</button>
+                  <button onClick={handleDeletePage} className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600">삭제</button>
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 220px)' }}>
+
+            {/* ─ 화면 등록/수정 폼 ─ */}
+            {isEditingPage && (
               <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b text-xs text-gray-500">
-                    <th className="px-2 py-2 text-center font-medium w-8">No.</th>
-                    <th className="px-3 py-2 text-left font-medium">제목</th>
-                    <th className="px-2 py-2 text-center font-medium w-16">카테고리</th>
-                  </tr>
-                </thead>
                 <tbody>
-                  {filteredPages.map((page, i) => (
-                    <tr
-                      key={page.id}
-                      onClick={() => handleSelectPage(page)}
-                      className={`border-b cursor-pointer hover:bg-blue-50 transition-colors ${
-                        selectedPageId === page.id ? 'bg-blue-100' : ''
-                      }`}
-                    >
-                      <td className="px-2 py-2 text-center text-xs text-gray-500">{i + 1}</td>
-                      <td className="px-3 py-2 text-xs font-medium max-w-[140px] truncate">{page.title}</td>
-                      <td className="px-2 py-2 text-center">
-                        <span className={`px-1.5 py-0.5 rounded text-xs ${CATEGORY_COLORS[page.category] ?? 'bg-gray-100 text-gray-600'}`}>
-                          {CATEGORY_LABELS[page.category] ?? page.category}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  <tr>
+                    <th className={thStyle} style={{ width: 100 }}>카테고리 <span className="text-red-500">*</span></th>
+                    <td className={tdStyle}>
+                      <select value={pageFormCategory} onChange={(e) => setPageFormCategory(e.target.value)} className="border rounded px-2 py-1 text-sm">
+                        {CATEGORIES.filter((c) => c.value !== 'ALL').map((c) => (
+                          <option key={c.value} value={c.value}>{c.label}</option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th className={thStyle}>제목 <span className="text-red-500">*</span></th>
+                    <td className={tdStyle}>
+                      <input type="text" value={pageFormTitle} onChange={(e) => setPageFormTitle(e.target.value)} placeholder="화면 제목" className="border rounded px-2 py-1 text-sm w-full" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <th className={thStyle}>설명</th>
+                    <td className={tdStyle}>
+                      <input type="text" value={pageFormDescription} onChange={(e) => setPageFormDescription(e.target.value)} placeholder="설명 (선택)" className="border rounded px-2 py-1 text-sm w-full" />
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             )}
-          </div>
-        </div>
 
-        {/* ── 우: 화면 상세 + 항목 ── */}
-        <div className="flex-1 flex flex-col gap-4 min-w-0">
-
-          {/* ─ 화면 정보 / 신규 폼 ─ */}
-          {(pageMode !== 'view' || selectedPageId) ? (
-            <div className="bg-white rounded border">
-              <div className="flex items-center justify-between p-3 border-b bg-gray-50">
-                <span className="font-medium text-sm">
-                  {pageMode === 'create' ? '화면 등록' : pageMode === 'edit' ? '화면 수정' : '화면 정보'}
-                </span>
-                <div className="flex gap-1">
-                  {pageMode === 'view' && selectedPageId ? (
-                    <>
-                      <button
-                        onClick={handleEditPage}
-                        className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-                      >
-                        수정
-                      </button>
-                      <button
-                        onClick={handleDeletePage}
-                        className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
-                      >
-                        삭제
-                      </button>
-                    </>
-                  ) : pageMode !== 'view' ? (
-                    <>
-                      <button
-                        onClick={handleSavePage}
-                        className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-                      >
-                        저장
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (pageMode === 'edit' && selectedPageId) {
-                            setPageMode('view')
-                          } else {
-                            setSelectedPageId(null)
-                            setPageMode('view')
-                          }
-                        }}
-                        className="px-3 py-1 text-xs bg-gray-400 text-white rounded hover:bg-gray-500"
-                      >
-                        취소
-                      </button>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="p-4">
-                {pageMode !== 'view' ? (
-                  /* 편집 폼 */
-                  <table className="w-full border-collapse text-sm">
-                    <tbody>
-                      <tr>
-                        <th className={thStyle} style={{ width: 100 }}>
-                          카테고리 <span className="text-red-500">*</span>
-                        </th>
-                        <td className={tdStyle}>
-                          <select
-                            value={pageFormCategory}
-                            onChange={(e) => setPageFormCategory(e.target.value)}
-                            className="border rounded px-2 py-1 text-sm"
-                          >
-                            {CATEGORIES.filter((c) => c.value !== 'ALL').map((c) => (
-                              <option key={c.value} value={c.value}>{c.label}</option>
-                            ))}
-                          </select>
-                        </td>
-                      </tr>
-                      <tr>
-                        <th className={thStyle}>제목 <span className="text-red-500">*</span></th>
-                        <td className={tdStyle}>
-                          <input
-                            type="text"
-                            value={pageFormTitle}
-                            onChange={(e) => setPageFormTitle(e.target.value)}
-                            placeholder="화면 제목"
-                            className="border rounded px-2 py-1 text-sm w-full"
-                          />
-                        </td>
-                      </tr>
+            {/* ─ 화면 상세 조회 ─ */}
+            {!isEditingPage && !isEditingItem && pageDetail && (
+              <>
+                {/* 기본 정보 */}
+                <table className="w-full border-collapse text-sm mb-4">
+                  <tbody>
+                    <tr>
+                      <th className={thStyle} style={{ width: 90 }}>카테고리</th>
+                      <td className={tdStyle}>
+                        <span className={`px-2 py-0.5 rounded text-xs ${CATEGORY_COLORS[pageDetail.category] ?? 'bg-gray-100 text-gray-600'}`}>
+                          {CATEGORY_LABELS[pageDetail.category] ?? pageDetail.category}
+                        </span>
+                      </td>
+                      <th className={thStyle} style={{ width: 70 }}>작성자</th>
+                      <td className={tdStyle}>{pageDetail.author}</td>
+                    </tr>
+                    <tr>
+                      <th className={thStyle}>제목</th>
+                      <td className={tdStyle} colSpan={3} style={{ fontWeight: 500 }}>{pageDetail.title}</td>
+                    </tr>
+                    {pageDetail.description && (
                       <tr>
                         <th className={thStyle}>설명</th>
-                        <td className={tdStyle}>
-                          <input
-                            type="text"
-                            value={pageFormDescription}
-                            onChange={(e) => setPageFormDescription(e.target.value)}
-                            placeholder="화면 설명 (선택)"
-                            className="border rounded px-2 py-1 text-sm w-full"
-                          />
-                        </td>
+                        <td className={tdStyle + ' text-gray-600'} colSpan={3}>{pageDetail.description}</td>
                       </tr>
-                    </tbody>
-                  </table>
-                ) : pageDetail ? (
-                  /* 조회 */
-                  <table className="w-full border-collapse text-sm">
-                    <tbody>
-                      <tr>
-                        <th className={thStyle} style={{ width: 100 }}>카테고리</th>
-                        <td className={tdStyle}>
-                          <span className={`px-2 py-0.5 rounded text-xs ${CATEGORY_COLORS[pageDetail.category] ?? 'bg-gray-100 text-gray-600'}`}>
-                            {CATEGORY_LABELS[pageDetail.category] ?? pageDetail.category}
-                          </span>
-                        </td>
-                      </tr>
-                      <tr>
-                        <th className={thStyle}>제목</th>
-                        <td className={tdStyle + ' font-medium'}>{pageDetail.title}</td>
-                      </tr>
-                      {pageDetail.description && (
-                        <tr>
-                          <th className={thStyle}>설명</th>
-                          <td className={tdStyle + ' text-gray-600'}>{pageDetail.description}</td>
-                        </tr>
-                      )}
-                      <tr>
-                        <th className={thStyle}>작성자</th>
-                        <td className={tdStyle}>{pageDetail.author}</td>
-                      </tr>
-                      <tr>
-                        <th className={thStyle}>등록일</th>
-                        <td className={tdStyle + ' text-gray-500'}>{pageDetail.createdAt.slice(0, 10)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                ) : (
-                  <div className="text-sm text-gray-400">로딩 중...</div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white rounded border p-10 text-center text-sm text-gray-400">
-              왼쪽에서 화면을 선택하거나 신규 버튼을 눌러 화면을 등록하세요.
-            </div>
-          )}
+                    )}
+                    <tr>
+                      <th className={thStyle}>등록일</th>
+                      <td className={tdStyle}>{pageDetail.createdAt.slice(0, 10)}</td>
+                      <th className={thStyle}>수정일</th>
+                      <td className={tdStyle}>{pageDetail.updatedAt.slice(0, 10)}</td>
+                    </tr>
+                  </tbody>
+                </table>
 
-          {/* ─ 피그마 항목 목록 (page 선택 후) ─ */}
-          {selectedPageId && (
-            <>
-              <div className="bg-white rounded border">
-                <div className="flex items-center justify-between p-3 border-b bg-gray-50">
-                  <span className="font-medium text-sm">
-                    피그마 항목 ({pageDetail?.items.length ?? 0}건)
-                  </span>
-                  {itemMode === 'view' ? (
+                {/* 피그마 항목 목록 */}
+                <div className="border rounded-lg overflow-hidden mt-3">
+                  <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b">
+                    <span className="text-sm font-semibold text-gray-700">
+                      피그마 항목
+                      {pageDetail.items.length > 0 && (
+                        <span className="ml-2 text-xs text-gray-500">({pageDetail.items.length}건)</span>
+                      )}
+                    </span>
                     <button
                       onClick={handleNewItem}
                       className="px-3 py-1 text-xs bg-pink-600 text-white rounded hover:bg-pink-700"
                     >
-                      추가
+                      + 추가
                     </button>
-                  ) : (
-                    <div className="flex gap-1">
-                      <button
-                        onClick={handleSaveItem}
-                        className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-                      >
-                        저장
-                      </button>
-                      <button
-                        onClick={() => {
-                          setItemMode('view')
-                          if (itemMode === 'create') setSelectedItemId(null)
-                        }}
-                        className="px-3 py-1 text-xs bg-gray-400 text-white rounded hover:bg-gray-500"
-                      >
-                        취소
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* 항목 등록/수정 폼 */}
-                {itemMode !== 'view' && (
-                  <div className="p-4 border-b bg-gray-50">
-                    <table className="w-full border-collapse text-sm">
-                      <tbody>
-                        <tr>
-                          <th className={thStyle} style={{ width: 100 }}>
-                            제목 <span className="text-red-500">*</span>
-                          </th>
-                          <td className={tdStyle}>
-                            <input
-                              type="text"
-                              value={itemFormTitle}
-                              onChange={(e) => setItemFormTitle(e.target.value)}
-                              placeholder="항목 제목"
-                              className="border rounded px-2 py-1 text-sm w-full"
-                            />
-                          </td>
-                        </tr>
-                        <tr>
-                          <th className={thStyle}>
-                            피그마 URL <span className="text-red-500">*</span>
-                          </th>
-                          <td className={tdStyle}>
-                            <input
-                              type="text"
-                              value={itemFormFigmaUrl}
-                              onChange={(e) => setItemFormFigmaUrl(e.target.value)}
-                              placeholder="https://www.figma.com/design/..."
-                              className="border rounded px-2 py-1 text-sm w-full font-mono text-xs"
-                            />
-                          </td>
-                        </tr>
-                        <tr>
-                          <th className={thStyle}>버전</th>
-                          <td className={tdStyle}>
-                            <input
-                              type="text"
-                              value={itemFormVersion}
-                              onChange={(e) => setItemFormVersion(e.target.value)}
-                              placeholder="v1.0 (선택)"
-                              className="border rounded px-2 py-1 text-sm w-40"
-                            />
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
                   </div>
-                )}
 
-                {/* 항목 카드 */}
-                <div className="p-3">
-                  {!pageDetail?.items.length ? (
-                    <div className="text-sm text-gray-400 text-center py-6">
-                      피그마 항목이 없습니다. 추가 버튼을 눌러주세요.
-                    </div>
+                  {pageDetail.items.length === 0 ? (
+                    <p className="text-center text-xs text-gray-400 py-6">피그마 항목이 없습니다. 추가 버튼을 눌러주세요.</p>
                   ) : (
-                    <div className="flex flex-wrap gap-3">
+                    <div className="p-3 flex flex-wrap gap-3">
                       {pageDetail.items.map((item) => {
                         const doneCount = item.checklist.filter((c) => c.checked).length
                         const totalCount = item.checklist.length
                         return (
                           <div
                             key={item.id}
-                            onClick={() => { setSelectedItemId(item.id); setItemMode('view') }}
-                            className={`border rounded-lg p-3 cursor-pointer transition-all hover:shadow-sm w-48 min-w-[180px] ${
+                            onClick={() => { setSelectedItemId(item.id); setIsEditingItem(false) }}
+                            className={`border rounded-lg p-3 cursor-pointer transition-all hover:shadow-sm w-48 shrink-0 ${
                               selectedItemId === item.id
                                 ? 'border-pink-400 bg-pink-50 shadow-sm'
-                                : 'border-gray-200 bg-white hover:border-pink-300'
+                                : 'border-gray-200 hover:border-pink-300'
                             }`}
                           >
                             <div className="font-medium text-sm truncate mb-1">{item.title}</div>
                             {item.version && (
-                              <span className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded mb-2">
-                                {item.version}
-                              </span>
+                              <span className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded mb-2">{item.version}</span>
                             )}
                             {totalCount > 0 && (
                               <div className="mt-1">
@@ -722,114 +570,143 @@ export default function FigmaPage() {
                     </div>
                   )}
                 </div>
-              </div>
 
-              {/* ─ 선택된 항목 상세: iframe + 체크리스트 ─ */}
-              {selectedItem && itemMode === 'view' && (
-                <div className="bg-white rounded border">
-                  <div className="flex items-center justify-between p-3 border-b bg-gray-50">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">{selectedItem.title}</span>
-                      {selectedItem.version && (
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
-                          {selectedItem.version}
-                        </span>
-                      )}
+                {/* 선택된 항목 상세: iframe + 체크리스트 */}
+                {selectedItem && (
+                  <>
+                    {/* Figma 미리보기 */}
+                    <div className="border rounded-lg overflow-hidden mt-3">
+                      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-700">{selectedItem.title}</span>
+                          {selectedItem.version && (
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">{selectedItem.version}</span>
+                          )}
+                        </div>
+                        <div className="flex gap-1">
+                          <button onClick={handleEditItem} className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700">수정</button>
+                          <button onClick={handleDeleteItem} className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600">삭제</button>
+                        </div>
+                      </div>
+                      <div className="p-4">
+                        <iframe
+                          src={toEmbedUrl(selectedItem.figmaUrl)}
+                          className="w-full rounded border bg-gray-50"
+                          style={{ height: 480 }}
+                          allowFullScreen
+                        />
+                        <div className="mt-2 text-xs text-gray-400 font-mono break-all">{selectedItem.figmaUrl}</div>
+                      </div>
                     </div>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={handleEditItem}
-                        className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-                      >
-                        수정
-                      </button>
-                      <button
-                        onClick={handleDeleteItem}
-                        className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  </div>
 
-                  {/* Figma iframe */}
-                  <div className="p-4 border-b">
-                    <iframe
-                      src={toEmbedUrl(selectedItem.figmaUrl)}
-                      className="w-full rounded border bg-gray-50"
-                      style={{ height: 480 }}
-                      allowFullScreen
-                    />
-                    <div className="mt-2 text-xs text-gray-400 font-mono break-all">
-                      {selectedItem.figmaUrl}
-                    </div>
-                  </div>
-
-                  {/* 체크리스트 */}
-                  <div className="p-4">
-                    <div className="font-medium text-sm mb-3">
-                      체크리스트 ({selectedItem.checklist.filter((c) => c.checked).length}/{selectedItem.checklist.length})
-                    </div>
-                    <div className="space-y-2 mb-3">
-                      {selectedItem.checklist.length === 0 ? (
-                        <div className="text-sm text-gray-400">체크리스트 항목이 없습니다.</div>
-                      ) : (
-                        selectedItem.checklist.map((c) => (
-                          <div key={c.id} className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={!!c.checked}
-                              onChange={(e) =>
-                                toggleCheckMutation.mutate({
-                                  pageId: selectedPageId,
-                                  itemId: selectedItem.id,
-                                  checkId: c.id,
-                                  checked: e.target.checked,
-                                })
-                              }
-                              className="cursor-pointer"
-                            />
-                            <span className={`text-sm flex-1 ${c.checked ? 'line-through text-gray-400' : ''}`}>
-                              {c.content}
+                    {/* 체크리스트 */}
+                    <div className="border rounded mt-3">
+                      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b">
+                        <span className="font-medium text-sm">
+                          체크리스트
+                          {selectedItem.checklist.length > 0 && (
+                            <span className="ml-2 text-xs text-gray-500">
+                              ({selectedItem.checklist.filter((c) => c.checked).length}/{selectedItem.checklist.length} 완료)
                             </span>
-                            <button
-                              onClick={() =>
-                                deleteCheckMutation.mutate({
-                                  pageId: selectedPageId,
-                                  itemId: selectedItem.id,
-                                  checkId: c.id,
-                                })
-                              }
-                              className="text-gray-300 hover:text-red-400 text-xs px-1"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))
-                      )}
+                          )}
+                        </span>
+                        {selectedItem.checklist.length > 0 && (() => {
+                          const done = selectedItem.checklist.filter((c) => c.checked).length
+                          const total = selectedItem.checklist.length
+                          return (
+                            <div className="flex items-center gap-2">
+                              <div className="w-32 bg-gray-200 rounded-full h-1.5">
+                                <div className="bg-green-500 h-1.5 rounded-full transition-all" style={{ width: `${(done / total) * 100}%` }} />
+                              </div>
+                              <span className="text-xs text-gray-500">{Math.round((done / total) * 100)}%</span>
+                            </div>
+                          )
+                        })()}
+                      </div>
+
+                      <div className="divide-y">
+                        {selectedItem.checklist.length === 0 ? (
+                          <p className="text-center text-xs text-gray-400 py-4">체크리스트 항목이 없습니다.</p>
+                        ) : (
+                          selectedItem.checklist.map((c) => (
+                            <div key={c.id} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 group">
+                              <input
+                                type="checkbox"
+                                checked={!!c.checked}
+                                onChange={(e) =>
+                                  toggleCheckMutation.mutate({
+                                    pageId: selectedPageId!,
+                                    itemId: selectedItem.id,
+                                    checkId: c.id,
+                                    checked: e.target.checked,
+                                  })
+                                }
+                                className="w-4 h-4 cursor-pointer accent-green-600"
+                              />
+                              <span className={`flex-1 text-sm ${c.checked ? 'line-through text-gray-400' : 'text-gray-700'}`}>{c.content}</span>
+                              <button
+                                onClick={() => deleteCheckMutation.mutate({ pageId: selectedPageId!, itemId: selectedItem.id, checkId: c.id })}
+                                className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-xs px-1 transition-opacity"
+                              >✕</button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <div className="flex gap-2 p-2 border-t bg-gray-50">
+                        <input
+                          ref={checkInputRef}
+                          type="text"
+                          value={checkInput}
+                          onChange={(e) => setCheckInput(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleAddCheck() }}
+                          placeholder="체크리스트 항목 입력 후 Enter 또는 추가"
+                          className="flex-1 border rounded px-2 py-1 text-sm"
+                        />
+                        <button
+                          onClick={handleAddCheck}
+                          disabled={!checkInput.trim()}
+                          className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >추가</button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <input
-                        ref={checkInputRef}
-                        type="text"
-                        value={checkInput}
-                        onChange={(e) => setCheckInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddCheck()}
-                        placeholder="체크리스트 항목 입력 후 Enter"
-                        className="flex-1 border rounded px-2 py-1 text-sm"
-                      />
-                      <button
-                        onClick={handleAddCheck}
-                        className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-                      >
-                        추가
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+                  </>
+                )}
+              </>
+            )}
+
+            {/* ─ 피그마 항목 등록/수정 폼 ─ */}
+            {isEditingItem && (
+              <table className="w-full border-collapse text-sm">
+                <tbody>
+                  <tr>
+                    <th className={thStyle} style={{ width: 100 }}>제목 <span className="text-red-500">*</span></th>
+                    <td className={tdStyle}>
+                      <input type="text" value={itemFormTitle} onChange={(e) => setItemFormTitle(e.target.value)} placeholder="항목 제목" className="border rounded px-2 py-1 text-sm w-full" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <th className={thStyle}>피그마 URL <span className="text-red-500">*</span></th>
+                    <td className={tdStyle}>
+                      <input type="text" value={itemFormFigmaUrl} onChange={(e) => setItemFormFigmaUrl(e.target.value)} placeholder="https://www.figma.com/design/..." className="border rounded px-2 py-1 text-sm w-full font-mono text-xs" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <th className={thStyle}>버전</th>
+                    <td className={tdStyle}>
+                      <input type="text" value={itemFormVersion} onChange={(e) => setItemFormVersion(e.target.value)} placeholder="v1.0 (선택)" className="border rounded px-2 py-1 text-sm w-40" />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
+
+            {/* ─ 빈 상태 ─ */}
+            {!isEditingPage && !isEditingItem && !selectedPageId && (
+              <p className="text-center text-sm text-gray-400 mt-16">화면을 선택하거나 신규 버튼을 클릭하세요.</p>
+            )}
+
+          </div>
         </div>
       </div>
     </div>
