@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import type { ColumnDefinition } from '@/components/SimpleTabulator'
 
 const SimpleTabulator = dynamic(() => import('@/components/SimpleTabulator'), { ssr: false })
+const MermaidChart = dynamic(() => import('@/components/MermaidChart'), { ssr: false })
 
 type Issue = {
   id: number
@@ -17,6 +18,7 @@ type Issue = {
   status: string
   priority: string
   author: string
+  mmdContent: string | null
   createdAt: string
   updatedAt: string
 }
@@ -117,6 +119,8 @@ export default function IssuePage() {
   const [formContent, setFormContent] = useState('')
   const [formStatus, setFormStatus] = useState('OPEN')
   const [formPriority, setFormPriority] = useState('MEDIUM')
+  const [formMmd, setFormMmd] = useState('')
+  const [mmdPreview, setMmdPreview] = useState(false)
   const [checkInput, setCheckInput] = useState('')
   const checkInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -198,7 +202,7 @@ export default function IssuePage() {
 
   // 저장
   const saveMutation = useMutation({
-    mutationFn: (data: { id?: number; category: string; title: string; content: string; status: string; priority: string }) => {
+    mutationFn: (data: { id?: number; category: string; title: string; content: string; status: string; priority: string; mmdContent?: string | null }) => {
       if (data.id) {
         return fetch(`/api/issues/${data.id}`, {
           method: 'PUT',
@@ -318,6 +322,8 @@ export default function IssuePage() {
     setFormContent('')
     setFormStatus('OPEN')
     setFormPriority('MEDIUM')
+    setFormMmd('')
+    setMmdPreview(false)
     setCheckInput('')
     pendingFiles.forEach((f) => URL.revokeObjectURL(f.previewUrl))
     setPendingFiles([])
@@ -330,6 +336,8 @@ export default function IssuePage() {
     setFormContent(issueDetail.content)
     setFormStatus(issueDetail.status)
     setFormPriority(issueDetail.priority)
+    setFormMmd(issueDetail.mmdContent || '')
+    setMmdPreview(false)
     setIsEditing(true)
   }
 
@@ -342,6 +350,7 @@ export default function IssuePage() {
       alert('내용을 입력하세요.', '입력 오류')
       return
     }
+    if (formMmd.trim()) setMmdPreview(true)
     saveMutation.mutate({
       id: selectedIssueId || undefined,
       category: formCategory,
@@ -349,6 +358,7 @@ export default function IssuePage() {
       content: formContent,
       status: formStatus,
       priority: formPriority,
+      mmdContent: formMmd.trim() || null,
     })
   }
 
@@ -614,6 +624,33 @@ export default function IssuePage() {
                   </tr>
                 </tbody>
               </table>
+
+              {/* MMD 다이어그램 */}
+              <div className="border rounded-lg overflow-hidden mt-3">
+                <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b">
+                  <span className="text-sm font-semibold text-gray-700">Mermaid 다이어그램</span>
+                  <button
+                    type="button"
+                    onClick={() => setMmdPreview((v) => !v)}
+                    className="px-3 py-1 text-xs bg-slate-600 text-white rounded hover:bg-slate-700"
+                  >
+                    {mmdPreview ? '편집' : '미리보기'}
+                  </button>
+                </div>
+                {mmdPreview ? (
+                  <div className="p-3 min-h-[100px]">
+                    {formMmd.trim() ? <MermaidChart chart={formMmd} /> : <p className="text-xs text-gray-400 text-center py-4">입력된 다이어그램이 없습니다.</p>}
+                  </div>
+                ) : (
+                  <textarea
+                    value={formMmd}
+                    onChange={(e) => setFormMmd(e.target.value)}
+                    rows={6}
+                    className="w-full border-0 px-3 py-2 text-sm font-mono resize-y focus:outline-none"
+                    placeholder={'flowchart LR\n  A[시작] --> B[처리] --> C[완료]'}
+                  />
+                )}
+              </div>
               </>
             ) : issueDetail ? (
               /* 조회 모드 */
@@ -663,7 +700,7 @@ export default function IssuePage() {
                 </table>
 
                 {/* 참고 이미지 섹션 */}
-                <div className="border rounded-lg overflow-hidden">
+                <div className="border rounded-lg overflow-hidden mt-3">
                   <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b">
                     <span className="text-sm font-semibold text-gray-700">
                       참고 이미지
@@ -723,7 +760,7 @@ export default function IssuePage() {
                 </div>
 
                 {/* 체크리스트 섹션 */}
-                <div className="border rounded">
+                <div className="border rounded mt-3">
                   <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b">
                     <span className="font-medium text-sm">
                       체크리스트
@@ -795,6 +832,18 @@ export default function IssuePage() {
                     </button>
                   </div>
                 </div>
+
+                {/* MMD 다이어그램 섹션 */}
+                {issueDetail?.mmdContent && (
+                  <div className="border rounded-lg overflow-hidden mt-3">
+                    <div className="px-3 py-2 bg-gray-50 border-b">
+                      <span className="text-sm font-semibold text-gray-700">Mermaid 다이어그램</span>
+                    </div>
+                    <div className="p-3">
+                      <MermaidChart chart={issueDetail.mmdContent} />
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <p className="text-center text-sm text-gray-400 mt-16">이슈를 선택하거나 신규 버튼을 클릭하세요.</p>

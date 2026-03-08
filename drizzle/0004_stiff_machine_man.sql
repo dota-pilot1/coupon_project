@@ -1,0 +1,1 @@
+ALTER TABLE `issue_post` ADD `mmd_content` text;

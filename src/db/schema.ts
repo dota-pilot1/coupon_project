@@ -151,6 +151,7 @@ export const reviewPost = sqliteTable('review_post', {
   title: text('title').notNull(),
   content: text('content').notNull(),
   author: text('author').notNull().default('admin'),
+  mmdContent: text('mmd_content'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 })
@@ -189,6 +190,7 @@ export const issuePost = sqliteTable('issue_post', {
   status: text('status').notNull().default('OPEN'), // OPEN | IN_PROGRESS | RESOLVED | CLOSED
   priority: text('priority').notNull().default('MEDIUM'), // LOW | MEDIUM | HIGH | CRITICAL
   author: text('author').notNull().default('admin'),
+  mmdContent: text('mmd_content'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 })

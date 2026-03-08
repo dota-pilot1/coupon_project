@@ -26,7 +26,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ issueId:
   const { issueId } = await params
   const id = Number(issueId)
   const body = await req.json()
-  const { category, title, content, status, priority } = body
+  const { category, title, content, status, priority, mmdContent } = body
 
   if (!title?.trim()) {
     return NextResponse.json({ error: '제목을 입력하세요.' }, { status: 400 })
@@ -40,6 +40,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ issueId:
       content: (content || '').trim(),
       status: status || 'OPEN',
       priority: priority || 'MEDIUM',
+      mmdContent: mmdContent || null,
       updatedAt: now,
     })
     .where(eq(issuePost.id, id))

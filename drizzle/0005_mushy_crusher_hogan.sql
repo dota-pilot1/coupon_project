@@ -1,0 +1,1 @@
+ALTER TABLE `review_post` ADD `mmd_content` text;

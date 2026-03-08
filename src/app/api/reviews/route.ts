@@ -29,7 +29,7 @@ export async function GET(req: Request) {
 // 게시글 작성
 export async function POST(req: Request) {
   const body = await req.json()
-  const { category, title, content, author } = body
+  const { category, title, content, author, mmdContent } = body
 
   if (!title?.trim()) {
     return NextResponse.json({ error: '제목을 입력하세요.' }, { status: 400 })
@@ -45,6 +45,7 @@ export async function POST(req: Request) {
       title: title.trim(),
       content: content.trim(),
       author: author || 'admin',
+      mmdContent: mmdContent || null,
       createdAt: now,
       updatedAt: now,
     })

@@ -8,12 +8,14 @@ import { toast } from 'sonner'
 import type { ColumnDefinition } from '@/components/SimpleTabulator'
 
 const SimpleTabulator = dynamic(() => import('@/components/SimpleTabulator'), { ssr: false })
+const MermaidChart = dynamic(() => import('@/components/MermaidChart'), { ssr: false })
 
 type Post = {
   id: number
   category: string
   title: string
   content: string
+  mmdContent: string | null
   author: string
   createdAt: string
   updatedAt: string
@@ -61,6 +63,8 @@ export default function ReviewPage() {
   const [formCategory, setFormCategory] = useState('COMMON')
   const [formTitle, setFormTitle] = useState('')
   const [formContent, setFormContent] = useState('')
+  const [formMmd, setFormMmd] = useState('')
+  const [mmdPreview, setMmdPreview] = useState(false)
   const [commentText, setCommentText] = useState('')
 
   // 게시글 목록
@@ -83,7 +87,7 @@ export default function ReviewPage() {
 
   // 저장
   const saveMutation = useMutation({
-    mutationFn: (data: { id?: number; category: string; title: string; content: string }) => {
+    mutationFn: (data: { id?: number; category: string; title: string; content: string; mmdContent?: string | null }) => {
       if (data.id) {
         return fetch(`/api/reviews/${data.id}`, {
           method: 'PUT',
@@ -157,6 +161,8 @@ export default function ReviewPage() {
     setFormCategory('COMMON')
     setFormTitle('')
     setFormContent('')
+    setFormMmd('')
+    setMmdPreview(false)
     setCommentText('')
   }
 
@@ -165,6 +171,8 @@ export default function ReviewPage() {
     setFormCategory(postDetail.category)
     setFormTitle(postDetail.title)
     setFormContent(postDetail.content)
+    setFormMmd(postDetail.mmdContent || '')
+    setMmdPreview(false)
     setIsEditing(true)
   }
 
@@ -177,11 +185,13 @@ export default function ReviewPage() {
       alert('내용을 입력하세요.', '입력 오류')
       return
     }
+    if (formMmd.trim()) setMmdPreview(true)
     saveMutation.mutate({
       id: selectedPostId || undefined,
       category: formCategory,
       title: formTitle,
       content: formContent,
+      mmdContent: formMmd.trim() || null,
     })
   }
 
@@ -292,6 +302,7 @@ export default function ReviewPage() {
           <div className="p-4">
             {isEditing ? (
               /* 편집 모드 */
+              <>
               <table className="w-full border-collapse text-sm">
                 <tbody>
                   <tr>
@@ -340,6 +351,33 @@ export default function ReviewPage() {
                   </tr>
                 </tbody>
               </table>
+              {/* MMD 다이어그램 */}
+              <div className="border rounded-lg overflow-hidden mt-3">
+                <div className="px-3 py-2 bg-gray-50 border-b flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-700">Mermaid 다이어그램</span>
+                  <button
+                    type="button"
+                    onClick={() => setMmdPreview((v) => !v)}
+                    className="text-xs px-2 py-0.5 rounded border border-gray-300 bg-white hover:bg-gray-100"
+                  >
+                    {mmdPreview ? '편집' : '미리보기'}
+                  </button>
+                </div>
+                {mmdPreview ? (
+                  <div className="p-3">
+                    {formMmd.trim() ? <MermaidChart chart={formMmd} /> : <p className="text-sm text-gray-400 text-center py-4">MMD 내용이 없습니다.</p>}
+                  </div>
+                ) : (
+                  <textarea
+                    value={formMmd}
+                    onChange={(e) => setFormMmd(e.target.value)}
+                    rows={6}
+                    className="w-full px-3 py-2 text-sm font-mono border-0 resize-y focus:outline-none"
+                    placeholder="Mermaid 다이어그램 코드를 입력하세요 (선택사항)"
+                  />
+                )}
+              </div>
+              </>
             ) : postDetail ? (
               /* 조회 모드 */
               <>
@@ -374,6 +412,18 @@ export default function ReviewPage() {
                 <div className="border rounded p-4 mb-4 min-h-[150px] text-sm whitespace-pre-wrap bg-gray-50">
                   {postDetail.content}
                 </div>
+
+                {/* MMD 다이어그램 */}
+                {postDetail.mmdContent && (
+                  <div className="border rounded-lg overflow-hidden mt-3 mb-4">
+                    <div className="px-3 py-2 bg-gray-50 border-b">
+                      <span className="text-sm font-semibold text-gray-700">Mermaid 다이어그램</span>
+                    </div>
+                    <div className="p-3">
+                      <MermaidChart chart={postDetail.mmdContent} />
+                    </div>
+                  </div>
+                )}
 
                 {/* 댓글 영역 */}
                 <div className="border rounded">

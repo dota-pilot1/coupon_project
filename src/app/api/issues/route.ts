@@ -26,7 +26,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const body = await req.json()
-  const { category, title, content, status, priority, author } = body
+  const { category, title, content, status, priority, author, mmdContent } = body
 
   if (!title?.trim()) {
     return NextResponse.json({ error: '제목을 입력하세요.' }, { status: 400 })
@@ -45,6 +45,7 @@ export async function POST(req: Request) {
       status: status || 'OPEN',
       priority: priority || 'MEDIUM',
       author: author || 'admin',
+      mmdContent: mmdContent || null,
       createdAt: now,
       updatedAt: now,
     })
