@@ -24,7 +24,7 @@ export async function PUT(
   const { title, content, contentType } = body as {
     title: string
     content: string
-    contentType: 'MD' | 'MMD'
+    contentType: 'NOTE' | 'MMD' | 'FIGMA' | 'FILE'
   }
   if (!title?.trim()) return NextResponse.json({ error: '제목을 입력하세요.' }, { status: 400 })
 

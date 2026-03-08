@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     folderId: number
     title: string
     content: string
-    contentType: 'MD' | 'MMD'
+    contentType: 'NOTE' | 'MMD' | 'FIGMA' | 'FILE'
   }
   if (!folderId || !title?.trim()) {
     return NextResponse.json({ error: '폴더와 제목은 필수입니다.' }, { status: 400 })

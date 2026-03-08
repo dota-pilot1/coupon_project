@@ -312,7 +312,7 @@ export const docPost = sqliteTable('doc_post', {
   folderId: integer('folder_id').notNull().references(() => docFolder.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   content: text('content').notNull().default(''),
-  contentType: text('content_type').notNull().default('MD'), // MD | MMD
+  contentType: text('content_type').notNull().default('NOTE'), // NOTE | MMD | FIGMA | FILE
   author: text('author').notNull().default('admin'),
   sortOrder: integer('sort_order').notNull().default(0),
   createdAt: text('created_at').notNull(),
