@@ -43,6 +43,13 @@
       "when": 1772948947293,
       "tag": "0005_mushy_crusher_hogan",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1772949546513,
+      "tag": "0006_remarkable_punisher",
+      "breakpoints": true
     }
   ]
 }

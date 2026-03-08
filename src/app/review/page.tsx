@@ -29,7 +29,10 @@ type Comment = {
   createdAt: string
 }
 
-type PostDetail = Post & { comments: Comment[] }
+type Step = { id: number; stepOrder: number; title: string | null; content: string }
+type StepForm = { title: string; content: string }
+
+type PostDetail = Post & { comments: Comment[]; steps: Step[] }
 
 type BoardCategory = { id: number; code: string; name: string }
 
@@ -63,6 +66,7 @@ export default function ReviewPage() {
   const [formCategory, setFormCategory] = useState('COMMON')
   const [formTitle, setFormTitle] = useState('')
   const [formContent, setFormContent] = useState('')
+  const [formSteps, setFormSteps] = useState<StepForm[]>([{ title: '', content: '' }])
   const [formMmd, setFormMmd] = useState('')
   const [mmdPreview, setMmdPreview] = useState(false)
   const [commentText, setCommentText] = useState('')
@@ -87,7 +91,7 @@ export default function ReviewPage() {
 
   // 저장
   const saveMutation = useMutation({
-    mutationFn: (data: { id?: number; category: string; title: string; content: string; mmdContent?: string | null }) => {
+    mutationFn: (data: { id?: number; category: string; title: string; content: string; steps: StepForm[]; mmdContent?: string | null }) => {
       if (data.id) {
         return fetch(`/api/reviews/${data.id}`, {
           method: 'PUT',
@@ -161,6 +165,7 @@ export default function ReviewPage() {
     setFormCategory('COMMON')
     setFormTitle('')
     setFormContent('')
+    setFormSteps([{ title: '', content: '' }])
     setFormMmd('')
     setMmdPreview(false)
     setCommentText('')
@@ -171,6 +176,11 @@ export default function ReviewPage() {
     setFormCategory(postDetail.category)
     setFormTitle(postDetail.title)
     setFormContent(postDetail.content)
+    setFormSteps(
+      postDetail.steps?.length > 0
+        ? postDetail.steps.map((s) => ({ title: s.title || '', content: s.content }))
+        : [{ title: '', content: '' }]
+    )
     setFormMmd(postDetail.mmdContent || '')
     setMmdPreview(false)
     setIsEditing(true)
@@ -181,8 +191,8 @@ export default function ReviewPage() {
       alert('제목을 입력하세요.', '입력 오류')
       return
     }
-    if (!formContent.trim()) {
-      alert('내용을 입력하세요.', '입력 오류')
+    if (formSteps.every((s) => !s.content.trim())) {
+      alert('단계 내용을 하나 이상 입력하세요.', '입력 오류')
       return
     }
     if (formMmd.trim()) setMmdPreview(true)
@@ -190,7 +200,8 @@ export default function ReviewPage() {
       id: selectedPostId || undefined,
       category: formCategory,
       title: formTitle,
-      content: formContent,
+      content: '',
+      steps: formSteps,
       mmdContent: formMmd.trim() || null,
     })
   }
@@ -335,22 +346,52 @@ export default function ReviewPage() {
                       />
                     </td>
                   </tr>
-                  <tr>
-                    <th className={thStyle}>
-                      내용 <span className="text-red-500">*</span>
-                    </th>
-                    <td className={tdStyle}>
-                      <textarea
-                        value={formContent}
-                        onChange={(e) => setFormContent(e.target.value)}
-                        rows={12}
-                        className="w-full border rounded px-2 py-1 text-sm"
-                        placeholder="리뷰 내용을 작성하세요"
-                      />
-                    </td>
-                  </tr>
                 </tbody>
               </table>
+
+              {/* 단계별 내용 */}
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-700">리뷰 단계 <span className="text-red-500">*</span></span>
+                  <button
+                    type="button"
+                    onClick={() => setFormSteps((prev) => [...prev, { title: '', content: '' }])}
+                    className="text-xs px-2 py-0.5 rounded border border-gray-300 bg-white hover:bg-gray-100"
+                  >
+                    + 단계 추가
+                  </button>
+                </div>
+                {formSteps.map((step, idx) => (
+                  <div key={idx} className="border rounded-lg overflow-hidden">
+                    <div className="px-3 py-2 bg-gray-50 border-b flex items-center gap-2">
+                      <span className="text-xs font-bold text-gray-500 w-14 shrink-0">Step {idx + 1}</span>
+                      <input
+                        type="text"
+                        value={step.title}
+                        onChange={(e) => setFormSteps((prev) => prev.map((s, i) => i === idx ? { ...s, title: e.target.value } : s))}
+                        className="flex-1 border rounded px-2 py-0.5 text-sm"
+                        placeholder="단계 제목 (선택사항)"
+                      />
+                      {formSteps.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setFormSteps((prev) => prev.filter((_, i) => i !== idx))}
+                          className="text-xs text-red-400 hover:text-red-600 px-1"
+                        >
+                          삭제
+                        </button>
+                      )}
+                    </div>
+                    <textarea
+                      value={step.content}
+                      onChange={(e) => setFormSteps((prev) => prev.map((s, i) => i === idx ? { ...s, content: e.target.value } : s))}
+                      rows={4}
+                      className="w-full px-3 py-2 text-sm border-0 resize-y focus:outline-none"
+                      placeholder="이 단계의 내용을 입력하세요"
+                    />
+                  </div>
+                ))}
+              </div>
               {/* MMD 다이어그램 */}
               <div className="border rounded-lg overflow-hidden mt-3">
                 <div className="px-3 py-2 bg-gray-50 border-b flex items-center justify-between">
@@ -408,10 +449,24 @@ export default function ReviewPage() {
                   </tbody>
                 </table>
 
-                {/* 본문 */}
-                <div className="border rounded p-4 mb-4 min-h-[150px] text-sm whitespace-pre-wrap bg-gray-50">
-                  {postDetail.content}
-                </div>
+                {/* 단계별 내용 */}
+                {postDetail.steps?.length > 0 ? (
+                  <div className="space-y-3 mb-4">
+                    {postDetail.steps.map((step) => (
+                      <div key={step.id} className="border rounded-lg overflow-hidden">
+                        <div className="px-3 py-2 bg-gray-50 border-b flex items-center gap-2">
+                          <span className="text-xs font-bold text-gray-500">Step {step.stepOrder}</span>
+                          {step.title && <span className="text-sm font-medium text-gray-700">{step.title}</span>}
+                        </div>
+                        <div className="px-4 py-3 text-sm whitespace-pre-wrap">{step.content}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : postDetail.content ? (
+                  <div className="border rounded p-4 mb-4 min-h-[150px] text-sm whitespace-pre-wrap bg-gray-50">
+                    {postDetail.content}
+                  </div>
+                ) : null}
 
                 {/* MMD 다이어그램 */}
                 {postDetail.mmdContent && (

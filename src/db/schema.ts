@@ -164,6 +164,14 @@ export const reviewComment = sqliteTable('review_comment', {
   createdAt: text('created_at').notNull(),
 })
 
+export const reviewStep = sqliteTable('review_step', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  postId: integer('post_id').notNull().references(() => reviewPost.id, { onDelete: 'cascade' }),
+  stepOrder: integer('step_order').notNull(),
+  title: text('title'),
+  content: text('content').notNull().default(''),
+})
+
 // ========================================
 // 게시판 카테고리 (이슈/코드리뷰 공용)
 // ========================================

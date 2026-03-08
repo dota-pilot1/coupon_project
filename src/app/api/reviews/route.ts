@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/db'
-import { reviewPost } from '@/db/schema'
+import { reviewPost, reviewStep } from '@/db/schema'
 import { desc, like, eq } from 'drizzle-orm'
 
 // 게시글 목록 조회
@@ -29,13 +29,13 @@ export async function GET(req: Request) {
 // 게시글 작성
 export async function POST(req: Request) {
   const body = await req.json()
-  const { category, title, content, author, mmdContent } = body
+  const { category, title, author, mmdContent, steps } = body
 
   if (!title?.trim()) {
     return NextResponse.json({ error: '제목을 입력하세요.' }, { status: 400 })
   }
-  if (!content?.trim()) {
-    return NextResponse.json({ error: '내용을 입력하세요.' }, { status: 400 })
+  if (!steps || !Array.isArray(steps) || steps.every((s: { content?: string }) => !s.content?.trim())) {
+    return NextResponse.json({ error: '단계 내용을 입력하세요.' }, { status: 400 })
   }
 
   const now = new Date().toISOString()
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     .values({
       category: category || 'COMMON',
       title: title.trim(),
-      content: content.trim(),
+      content: '',
       author: author || 'admin',
       mmdContent: mmdContent || null,
       createdAt: now,
@@ -51,5 +51,16 @@ export async function POST(req: Request) {
     })
     .run()
 
-  return NextResponse.json({ ok: true, id: result.lastInsertRowid })
+  const postId = Number(result.lastInsertRowid)
+  const validSteps = (steps as { title?: string; content: string }[]).filter((s) => s.content?.trim())
+  for (let i = 0; i < validSteps.length; i++) {
+    db.insert(reviewStep).values({
+      postId,
+      stepOrder: i + 1,
+      title: validSteps[i].title?.trim() || null,
+      content: validSteps[i].content.trim(),
+    }).run()
+  }
+
+  return NextResponse.json({ ok: true, id: postId })
 }
