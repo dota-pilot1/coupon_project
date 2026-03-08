@@ -31,6 +31,14 @@ type ChecklistItem = {
 
 type IssueDetail = Issue & { checklist: ChecklistItem[] }
 
+type IssueImage = {
+  id: number
+  issueId: number
+  url: string
+  filename: string
+  createdAt: string
+}
+
 type BoardCategory = { id: number; code: string; name: string }
 
 const STATUSES = [
@@ -111,6 +119,10 @@ export default function IssuePage() {
   const [formPriority, setFormPriority] = useState('MEDIUM')
   const [checkInput, setCheckInput] = useState('')
   const checkInputRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const newImageInputRef = useRef<HTMLInputElement>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<{ file: File; previewUrl: string }[]>([])
 
   // 이슈 목록
   const { data: issues = [] } = useQuery<Issue[]>({
@@ -131,6 +143,59 @@ export default function IssuePage() {
     enabled: !!selectedIssueId && !isEditing,
   })
 
+  // 이슈 이미지 목록
+  const { data: issueImages = [] } = useQuery<IssueImage[]>({
+    queryKey: ['issueImages', selectedIssueId],
+    queryFn: () => fetch(`/api/issues/${selectedIssueId}/images`).then((r) => r.json()),
+    enabled: !!selectedIssueId && !isEditing,
+  })
+
+  // 이미지 업로드
+  const uploadImage = async (file: File) => {
+    if (!selectedIssueId) return
+    setIsUploading(true)
+    try {
+      // 1. Presigned URL 요청
+      const { presignedUrl, publicUrl } = await fetch('/api/upload/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      }).then((r) => r.json())
+
+      // 2. S3 직접 업로드
+      await fetch(presignedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      })
+
+      // 3. DB 저장
+      await fetch(`/api/issues/${selectedIssueId}/images`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: publicUrl, filename: file.name }),
+      })
+
+      queryClient.invalidateQueries({ queryKey: ['issueImages', selectedIssueId] })
+      toast.success('이미지가 업로드되었습니다.')
+    } catch {
+      toast.error('업로드에 실패했습니다.')
+    } finally {
+      setIsUploading(false)
+      if (imageInputRef.current) imageInputRef.current.value = ''
+    }
+  }
+
+  // 이미지 삭제
+  const deleteImageMutation = useMutation({
+    mutationFn: (imageId: number) =>
+      fetch(`/api/issues/${selectedIssueId}/images/${imageId}`, { method: 'DELETE' }).then((r) => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['issueImages', selectedIssueId] })
+      toast.success('이미지가 삭제되었습니다.')
+    },
+  })
+
   // 저장
   const saveMutation = useMutation({
     mutationFn: (data: { id?: number; category: string; title: string; content: string; status: string; priority: string }) => {
@@ -147,12 +212,36 @@ export default function IssuePage() {
         body: JSON.stringify(data),
       }).then((r) => r.json())
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ['issues'] })
       const newId = result.id || selectedIssueId
       if (newId) {
         setSelectedIssueId(Number(newId))
         queryClient.invalidateQueries({ queryKey: ['issue', Number(newId)] })
+      }
+      // 신규 작성 시 대기 중인 이미지 업로드
+      if (!selectedIssueId && result.id && pendingFiles.length > 0) {
+        setIsUploading(true)
+        try {
+          for (const { file } of pendingFiles) {
+            const { presignedUrl, publicUrl } = await fetch('/api/upload/presign', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ filename: file.name, contentType: file.type }),
+            }).then((r) => r.json())
+            await fetch(presignedUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file })
+            await fetch(`/api/issues/${result.id}/images`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: publicUrl, filename: file.name }),
+            })
+          }
+          queryClient.invalidateQueries({ queryKey: ['issueImages', Number(result.id)] })
+        } finally {
+          setIsUploading(false)
+          pendingFiles.forEach((f) => URL.revokeObjectURL(f.previewUrl))
+          setPendingFiles([])
+        }
       }
       setIsEditing(false)
       toast.success('저장되었습니다.')
@@ -230,6 +319,8 @@ export default function IssuePage() {
     setFormStatus('OPEN')
     setFormPriority('MEDIUM')
     setCheckInput('')
+    pendingFiles.forEach((f) => URL.revokeObjectURL(f.previewUrl))
+    setPendingFiles([])
   }
 
   const handleEdit = () => {
@@ -274,6 +365,8 @@ export default function IssuePage() {
     if (selectedIssueId) {
       setIsEditing(false)
     } else {
+      pendingFiles.forEach((f) => URL.revokeObjectURL(f.previewUrl))
+      setPendingFiles([])
       handleNew()
     }
   }
@@ -380,6 +473,7 @@ export default function IssuePage() {
           <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 220px)' }}>
             {isEditing ? (
               /* 편집 모드 */
+              <>
               <table className="w-full border-collapse text-sm">
                 <tbody>
                   <tr>
@@ -426,8 +520,72 @@ export default function IssuePage() {
                       </select>
                     </td>
                   </tr>
+                </tbody>
+              </table>
+
+              {/* 신규 작성 시 이미지 첨부 */}
+              {!selectedIssueId && (
+                <div className="border rounded-lg overflow-hidden mt-3">
+                  <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b">
+                    <span className="text-sm font-semibold text-gray-700">
+                      참고 이미지
+                      {pendingFiles.length > 0 && (
+                        <span className="ml-2 text-xs text-gray-500">({pendingFiles.length}장 선택됨)</span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => newImageInputRef.current?.click()}
+                      className="px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                    >
+                      + 이미지 추가
+                    </button>
+                    <input
+                      ref={newImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files ?? [])
+                        const newItems = files.map((file) => ({ file, previewUrl: URL.createObjectURL(file) }))
+                        setPendingFiles((prev) => [...prev, ...newItems])
+                        if (newImageInputRef.current) newImageInputRef.current.value = ''
+                      }}
+                    />
+                  </div>
+                  {pendingFiles.length === 0 ? (
+                    <p className="text-center text-xs text-gray-400 py-4">이미지를 추가하면 저장 시 함께 업로드됩니다.</p>
+                  ) : (
+                    <div className="p-3 grid grid-cols-3 gap-2">
+                      {pendingFiles.map(({ file, previewUrl }, idx) => (
+                        <div key={previewUrl} className="relative group aspect-square rounded overflow-hidden border bg-gray-100">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={previewUrl} alt={file.name} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              URL.revokeObjectURL(previewUrl)
+                              setPendingFiles((prev) => prev.filter((_, i) => i !== idx))
+                            }}
+                            className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center transition-opacity leading-none"
+                          >
+                            ✕
+                          </button>
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-1 py-0.5 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                            {file.name}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <table className="w-full border-collapse text-sm mt-3">
+                <tbody>
                   <tr>
-                    <th className={thStyle}>
+                    <th className={thStyle} style={{ width: '90px' }}>
                       제목 <span className="text-red-500">*</span>
                     </th>
                     <td className={tdStyle}>
@@ -456,6 +614,7 @@ export default function IssuePage() {
                   </tr>
                 </tbody>
               </table>
+              </>
             ) : issueDetail ? (
               /* 조회 모드 */
               <>
@@ -502,6 +661,66 @@ export default function IssuePage() {
                     </tr>
                   </tbody>
                 </table>
+
+                {/* 참고 이미지 섹션 */}
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b">
+                    <span className="text-sm font-semibold text-gray-700">
+                      참고 이미지
+                      {issueImages.length > 0 && (
+                        <span className="ml-2 text-xs text-gray-500">({issueImages.length}장)</span>
+                      )}
+                    </span>
+                    <button
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {isUploading ? '업로드 중…' : '+ 이미지 추가'}
+                    </button>
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files ?? [])
+                        for (const file of files) await uploadImage(file)
+                      }}
+                    />
+                  </div>
+
+                  {issueImages.length === 0 ? (
+                    <p className="text-center text-xs text-gray-400 py-6">
+                      {isUploading ? '이미지 업로드 중…' : '등록된 이미지가 없습니다.'}
+                    </p>
+                  ) : (
+                    <div className="p-3 grid grid-cols-3 gap-2">
+                      {issueImages.map((img) => (
+                        <div key={img.id} className="relative group aspect-square rounded overflow-hidden border bg-gray-100">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={img.url}
+                            alt={img.filename}
+                            className="w-full h-full object-cover cursor-pointer"
+                            onClick={() => window.open(img.url, '_blank')}
+                          />
+                          <button
+                            onClick={() => deleteImageMutation.mutate(img.id)}
+                            className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center transition-opacity leading-none"
+                            title="삭제"
+                          >
+                            ✕
+                          </button>
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-1 py-0.5 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                            {img.filename}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {/* 체크리스트 섹션 */}
                 <div className="border rounded">

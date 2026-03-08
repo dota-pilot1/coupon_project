@@ -201,6 +201,14 @@ export const issueChecklist = sqliteTable('issue_checklist', {
   createdAt: text('created_at').notNull(),
 })
 
+export const issueImage = sqliteTable('issue_image', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  issueId: integer('issue_id').notNull().references(() => issuePost.id, { onDelete: 'cascade' }),
+  url: text('url').notNull(),
+  filename: text('filename').notNull(),
+  createdAt: text('created_at').notNull(),
+})
+
 export const codeDetail = sqliteTable('code_detail', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   groupCd: text('group_cd').notNull().references(() => codeGroup.groupCd, { onDelete: 'cascade' }),
