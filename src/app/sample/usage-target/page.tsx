@@ -73,7 +73,7 @@ export default function UsageTargetSamplePage() {
         </div>
 
         {/* JSON 뷰어 (개발 확인용) */}
-        {showJson && (
+        {/* {showJson && (
           <div className="border-t">
             <div className="px-4 py-2 bg-gray-50 border-b">
               <span className="text-xs font-medium text-gray-600">현재 조건 JSON (개발 확인용)</span>
@@ -82,17 +82,17 @@ export default function UsageTargetSamplePage() {
               {JSON.stringify(conditions, null, 2)}
             </pre>
           </div>
-        )}
+        )} */}
       </div>
 
       {/* 조건 요약 카드 */}
-      {conditions.length > 0 && (
+      {/* {conditions.length > 0 && (
         <div className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
           {conditions.map((cond) => (
             <ConditionSummaryCard key={cond.shopId} condition={cond} />
           ))}
         </div>
-      )}
+      )} */}
     </div>
   )
 }

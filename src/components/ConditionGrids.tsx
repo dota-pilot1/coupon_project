@@ -149,7 +149,9 @@ export default function ConditionGrids({ condition, onChange }: Props) {
               <div
                 key={site.id}
                 onClick={() => {
+                  // 사이트 클릭시 선택/해제, 선택된 사이트에 대해 재조회
                   setSelectedSite(site.id === selectedSite ? null : site.id)
+                  
                   setSelectedCorner(null)
                 }}
                 className={`flex items-center justify-between px-3 py-2 text-xs border-b cursor-pointer ${

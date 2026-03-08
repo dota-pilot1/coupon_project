@@ -1,0 +1,111 @@
+===================================================
+사용 대상 제한 설정 — 조회 로직 분석
+파일: src/components/ConditionGrids.tsx
+===================================================
+
+─────────────────────────────────────────────────
+1. 데이터 구조 (flat 배열)
+─────────────────────────────────────────────────
+
+condition = {
+  shopId: 'SHOP1',
+  shopName: '인천공항T1점',
+  sites:   [{ id: 'S1', name: '1층 푸드코트' },
+            { id: 'S2', name: '2층 푸드코트' }],
+  corners: [{ id: 'C1', name: '한식코너', siteId: 'S1' },
+            { id: 'C2', name: '양식코너', siteId: 'S1' },
+            { id: 'C3', name: '카페코너', siteId: 'S2' }],
+  menus:   [{ id: 'M1', name: '비빔밥', siteId: 'S1', cornerId: 'C1' }],
+}
+
+포인트:
+- 계층 구조를 중첩 객체(트리)가 아닌 flat 배열로 관리
+- DB의 FK 관계처럼 siteId, cornerId를 각 항목에 심어둠
+- 선택 시 filter()로 자식 항목을 추출
+
+
+─────────────────────────────────────────────────
+2. 데이터 두 종류 구분
+─────────────────────────────────────────────────
+
+| 변수              | 의미                          | 방식            |
+|------------------|-------------------------------|-----------------|
+| filteredCorners  | 이미 추가된 코너 중 현재 선택된 사이트 것 | 로컬 filter() |
+| filteredMenus    | 이미 추가된 메뉴 중 현재 선택된 코너/사이트 것 | 로컬 filter() |
+| availableCorners | 추가 가능한 코너 목록 (드롭다운용)   | API 재조회       |
+| availableMenus   | 추가 가능한 메뉴 목록 (드롭다운용)   | API 재조회       |
+
+→ 그리드 패널에 보이는 항목 = 로컬 필터링 (API 없음)
+→ [추가] 버튼 드롭다운의 항목 = API 조회
+
+
+─────────────────────────────────────────────────
+3. 필터링 동작 원리 (리렌더 트리거)
+─────────────────────────────────────────────────
+
+사이트 클릭
+  → setSelectedSite('S1')         ← state 변경
+    → 컴포넌트 함수 전체 재실행     ← React 리렌더
+      → filteredCorners = condition.corners.filter(c => c.siteId === 'S1')
+      → filteredMenus   = condition.menus.filter(...)
+      → JSX 반환 → 화면 업데이트
+
+filteredCorners, filteredMenus 는 저장된 값이 아니라
+매 렌더마다 새로 계산되는 파생값(derived value)임
+
+
+─────────────────────────────────────────────────
+4. React Query — 어느 쿼리가 언제 재조회되나
+─────────────────────────────────────────────────
+
+사이트 클릭 시 (selectedSite: A→B, selectedCorner: X→null):
+
+| 쿼리            | queryKey                              | key 변화 | enabled                  | 결과        |
+|----------------|---------------------------------------|----------|--------------------------|-------------|
+| availableSites  | ['sites', shopId]                     | ❌ 없음   | 항상 true                | 재조회 안됨  |
+| availableCorners| ['corners', shopId, selectedSite]     | ✅ 있음   | !!B = true               | 재조회됨    |
+| availableMenus  | ['menus', shopId, selectedSite, selectedCorner] | ✅ 있음 | !!B && !!null = false | 재조회 안됨 |
+
+React Query 규칙:
+- queryKey 배열이 바뀐 것만 재조회
+- enabled=false 이면 key가 바뀌어도 실행 안됨
+
+
+─────────────────────────────────────────────────
+5. setSelectedCorner(null) 이 필수인 이유
+─────────────────────────────────────────────────
+
+사이트 변경 시 setSelectedCorner(null) 를 안 하면:
+
+버그 1) 잘못된 API 호출
+  → enabled: !!siteB && !!oldCornerA = true
+  → /sites/SiteB/corners/CornA/menus ← 다른 사이트의 코너로 조회
+
+버그 2) 잘못된 그리드 표시
+  → filteredMenus 가 oldCornerA 기준으로 필터링됨
+
+버그 3) 잘못된 데이터 저장
+  → addMenu 에서 { siteId: SiteB, cornerId: oldCornA } FK 오염
+
+결론: setSelectedCorner(null) 은 메뉴 쿼리를 막기 위한 것이며 필수임
+
+
+─────────────────────────────────────────────────
+6. 입력 UI vs 조회 UI 차이
+─────────────────────────────────────────────────
+
+[현재 ConditionGrids = 입력 UI]
+- 목적: 아직 설정 안 된 항목을 골라서 추가
+- 드릴다운 (사이트→코너→메뉴 순서로 선택) 이 UX상 자연스러움
+- 코너/메뉴를 추가하려면 먼저 부모를 선택해야 cornerId 등을 알 수 있음
+
+[조회 UI라면]
+- 목적: 이미 저장된 설정을 한눈에 보기
+- 점포 클릭 → 사이트/코너/메뉴 전부 한 번에 필요
+- 현재 sample/usage-target 의 ConditionSummaryCard 가 그 역할
+  (conditions state에 모든 데이터가 이미 있어서 클릭 없이도 전부 표시)
+
+[프로토타입(page.tsx)의 실제 동작]
+- 쿠폰 선택 시 /api/coupons/{id} 에서 conditions 전체를 한 번에 가져옴
+- 점포 탭 전환은 setActiveTab(index) 만 호출, 추가 API 없음
+- 메모리에 있는 데이터를 탭으로 나눠 보여주는 구조

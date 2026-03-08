@@ -1,0 +1,56 @@
+1. 
+/Users/terecal/coupon_project/src/app/page.tsx 에서 쿠폰 관련 모두 조회 할때 사용 대상 제한도 조회
+
+'''
+  const handleSelectCoupon = async (couponId: string) => {
+    setSelectedCoupon(couponId)
+    const res = await fetch(`/api/coupons/${couponId}`)
+    const data = await res.json()
+    setFormData({
+      id: data.id,
+      name: data.name,
+      description: data.description || '',
+      discountType: data.discountType,
+      discountValue: data.discountValue,
+      termTypeCd: data.termTypeCd || '00',
+      startDate: data.startDate || '',
+      endDate: data.endDate || '',
+    })
+    setTimeSlots(data.timeSlots || [])
+    setDayOfWeek(data.dayOfWeek || '0000000')
+    setConditions(data.conditions || [])
+  }
+'''
+
+2.
+아래 3개 쿼리는 그리드에 보이는 항목이 아니라 [추가] 버튼 드롭다운의 후보 목록을 위한 것
+선택한 항목의 직계 하위만 재조회됨 (Dependent Queries 패턴)
+
+- availableSites  : shopId 기준, 항상 조회 (재조회 없음)
+- availableCorners: selectedSite 가 바뀌면 재조회 (직계 하위)
+- availableMenus  : selectedCorner 가 바뀌면 재조회 (직계 하위), selectedCorner=null 이면 enabled=false 로 실행 안됨
+  const { data: availableSites = [] } = useQuery<Site[]>({
+    queryKey: ['sites', condition.shopId],
+    queryFn: () =>
+      fetch(`/api/shops/${condition.shopId}/sites`).then((r) => r.json()),
+  })
+
+  // 선택된 사이트의 코너 목록
+  const { data: availableCorners = [] } = useQuery<Corner[]>({
+    queryKey: ['corners', condition.shopId, selectedSite],
+    queryFn: () =>
+      fetch(
+        `/api/shops/${condition.shopId}/sites/${selectedSite}/corners`
+      ).then((r) => r.json()),
+    enabled: !!selectedSite,
+  })
+
+  // 선택된 코너의 메뉴 목록
+  const { data: availableMenus = [] } = useQuery<Menu[]>({
+    queryKey: ['menus', condition.shopId, selectedSite, selectedCorner],
+    queryFn: () =>
+      fetch(
+        `/api/shops/${condition.shopId}/sites/${selectedSite}/corners/${selectedCorner}/menus`
+      ).then((r) => r.json()),
+    enabled: !!selectedSite && !!selectedCorner,
+  })
