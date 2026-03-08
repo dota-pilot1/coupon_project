@@ -30,13 +30,6 @@ const REAL_MENU: DropdownMenu = {
   ],
 }
 
-const SAMPLE_MENU: DropdownMenu = {
-  label: 'Sample',
-  items: [
-    { label: '사용 대상 제한 옵션 설정', href: '/sample/usage-target' },
-  ],
-}
-
 const SETTING_ITEMS = [
   { label: '공통코드 관리', href: '/common-code' },
   { label: '카테고리 관리', href: '/board-category' },
@@ -164,7 +157,6 @@ export default function Header() {
             >
               프론트엔드
             </Link>
-            <Dropdown menu={SAMPLE_MENU} pathname={pathname} color="bg-orange-600 text-white" />
           </nav>
         </div>
 
