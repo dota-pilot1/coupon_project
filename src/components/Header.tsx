@@ -32,6 +32,7 @@ const REAL_MENU: DropdownMenu = {
 
 const SETTING_ITEMS = [
   { label: '공통코드 관리', href: '/common-code' },
+  { label: '카테고리 관리', href: '/board-category' },
 ]
 
 function Dropdown({ menu, pathname, color }: { menu: DropdownMenu; pathname: string; color: string }) {
@@ -116,6 +117,16 @@ export default function Header() {
           <nav className="flex gap-1">
             <Dropdown menu={PROTO_MENU} pathname={pathname} color="bg-blue-600 text-white" />
             <Dropdown menu={REAL_MENU} pathname={pathname} color="bg-emerald-600 text-white" />
+            <Link
+              href="/issue"
+              className={`flex items-center px-4 py-2 text-sm rounded-t transition-colors ${
+                pathname.startsWith('/issue')
+                  ? 'bg-purple-600 text-white font-medium'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              이슈 관리
+            </Link>
             <Link
               href="/review"
               className={`flex items-center px-4 py-2 text-sm rounded-t transition-colors ${

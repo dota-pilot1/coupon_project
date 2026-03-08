@@ -163,6 +163,44 @@ export const reviewComment = sqliteTable('review_comment', {
   createdAt: text('created_at').notNull(),
 })
 
+// ========================================
+// 게시판 카테고리 (이슈/코드리뷰 공용)
+// ========================================
+
+export const boardCategory = sqliteTable('board_category', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  code: text('code').notNull().unique(),
+  name: text('name').notNull(),
+  sortOrder: integer('sort_order').notNull().default(0),
+  useYn: text('use_yn').notNull().default('Y'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+// ========================================
+// 이슈 관리
+// ========================================
+
+export const issuePost = sqliteTable('issue_post', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  category: text('category').notNull().default('COMMON'), // COUPON_MASTER | APPROVAL | ISSUANCE | USAGE | COMMON
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  status: text('status').notNull().default('OPEN'), // OPEN | IN_PROGRESS | RESOLVED | CLOSED
+  priority: text('priority').notNull().default('MEDIUM'), // LOW | MEDIUM | HIGH | CRITICAL
+  author: text('author').notNull().default('admin'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const issueChecklist = sqliteTable('issue_checklist', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  issueId: integer('issue_id').notNull().references(() => issuePost.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  checked: integer('checked').notNull().default(0), // 0=미완료, 1=완료
+  createdAt: text('created_at').notNull(),
+})
+
 export const codeDetail = sqliteTable('code_detail', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   groupCd: text('group_cd').notNull().references(() => codeGroup.groupCd, { onDelete: 'cascade' }),

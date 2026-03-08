@@ -29,22 +29,7 @@ type Comment = {
 
 type PostDetail = Post & { comments: Comment[] }
 
-const CATEGORIES = [
-  { value: 'ALL', label: '전체' },
-  { value: 'COUPON_MASTER', label: '쿠폰 마스터' },
-  { value: 'APPROVAL', label: '승인 관리' },
-  { value: 'ISSUANCE', label: '쿠폰 발급' },
-  { value: 'USAGE', label: '사용 현황' },
-  { value: 'COMMON', label: '공통' },
-]
-
-const CATEGORY_LABELS: Record<string, string> = {
-  COUPON_MASTER: '쿠폰 마스터',
-  APPROVAL: '승인 관리',
-  ISSUANCE: '쿠폰 발급',
-  USAGE: '사용 현황',
-  COMMON: '공통',
-}
+type BoardCategory = { id: number; code: string; name: string }
 
 const columns: ColumnDefinition[] = [
   { title: 'No.', field: 'rn', width: 50, hozAlign: 'center', headerSort: false },
@@ -61,6 +46,14 @@ export default function ReviewPage() {
   // 검색
   const [filterCategory, setFilterCategory] = useState('ALL')
   const [searchKeyword, setSearchKeyword] = useState('')
+
+  // 카테고리 목록
+  const { data: categoryList = [] } = useQuery<BoardCategory[]>({
+    queryKey: ['boardCategories'],
+    queryFn: () => fetch('/api/board-categories').then((r) => r.json()),
+  })
+  const categoryMap = useMemo(() => Object.fromEntries(categoryList.map((c) => [c.code, c.name])), [categoryList])
+  const CATEGORIES = useMemo(() => [{ value: 'ALL', label: '전체' }, ...categoryList.map((c) => ({ value: c.code, label: c.name }))], [categoryList])
 
   // 선택/편집
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null)
@@ -145,7 +138,7 @@ export default function ReviewPage() {
     posts.map((p, i) => ({
       ...p,
       rn: i + 1,
-      categoryLabel: CATEGORY_LABELS[p.category] || p.category,
+      categoryLabel: categoryMap[p.category] || p.category,
       dateDisplay: p.createdAt.slice(0, 10),
     })),
     [posts]
@@ -356,7 +349,7 @@ export default function ReviewPage() {
                       <th className={thStyle} style={{ width: '100px' }}>카테고리</th>
                       <td className={tdStyle}>
                         <span className="inline-block px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700">
-                          {CATEGORY_LABELS[postDetail.category] || postDetail.category}
+                          {categoryMap[postDetail.category] || postDetail.category}
                         </span>
                       </td>
                       <th className={thStyle} style={{ width: '80px' }}>작성자</th>
