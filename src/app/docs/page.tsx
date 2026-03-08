@@ -132,9 +132,9 @@ export default function DocsPage() {
 
   const [editingFolderId, setEditingFolderId] = useState<number | null>(null)
   const [editingFolderName, setEditingFolderName] = useState('')
-  const [newFolderParentId, setNewFolderParentId] = useState<number | null>(null)
-  const [newFolderName, setNewFolderName] = useState('')
-  const [showNewFolderInput, setShowNewFolderInput] = useState(false)
+  // 인라인 폴더 생성: parentId=null 이면 루트, number면 해당 폴더 하위
+  const [inlineFolderInput, setInlineFolderInput] = useState<{ parentId: number | null } | null>(null)
+  const [inlineFolderName, setInlineFolderName] = useState('')
 
   const [ctxMenu, setCtxMenu] = useState<CtxMenu>(null)
 
@@ -190,8 +190,8 @@ export default function DocsPage() {
       }).then((r) => r.json()),
     onSuccess: (created: DocFolder) => {
       queryClient.invalidateQueries({ queryKey: ['docFolders'] })
-      setShowNewFolderInput(false)
-      setNewFolderName('')
+      setInlineFolderInput(null)
+      setInlineFolderName('')
       if (created.parentId !== null) setExpandedFolders((p) => new Set(p).add(created.parentId!))
       toast.success('폴더가 생성되었습니다.')
     },
@@ -289,8 +289,14 @@ export default function DocsPage() {
   }
 
   const handleCreateFolder = () => {
-    if (!newFolderName.trim()) { alert('폴더명을 입력하세요.', '입력 오류'); return }
-    createFolderMutation.mutate({ name: newFolderName.trim(), parentId: newFolderParentId })
+    if (!inlineFolderName.trim()) return
+    createFolderMutation.mutate({ name: inlineFolderName.trim(), parentId: inlineFolderInput?.parentId ?? null })
+  }
+
+  const openInlineFolderInput = (parentId: number | null) => {
+    setInlineFolderInput({ parentId })
+    setInlineFolderName('')
+    if (parentId !== null) setExpandedFolders((p) => new Set(p).add(parentId))
   }
 
   const openCtxMenu = (e: React.MouseEvent, folder: DocFolder) => {
@@ -302,6 +308,28 @@ export default function DocsPage() {
   const thStyle = 'bg-gray-50 border border-gray-200 px-3 py-2 text-left font-normal text-sm whitespace-nowrap'
   const tdStyle = 'border border-gray-200 px-3 py-1 text-sm'
 
+
+  // 인라인 폴더명 입력 행
+  const renderInlineFolderInput = (depth: number) => (
+    <div
+      className="flex items-center gap-1 py-1"
+      style={{ paddingLeft: `${depth * 14 + 8}px`, paddingRight: '4px' }}
+    >
+      <span className="text-[10px] text-gray-300 w-3 shrink-0">·</span>
+      <span className="shrink-0 text-base">📁</span>
+      <input
+        autoFocus
+        value={inlineFolderName}
+        onChange={(e) => setInlineFolderName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleCreateFolder()
+          if (e.key === 'Escape') { setInlineFolderInput(null); setInlineFolderName('') }
+        }}
+        placeholder="폴더명 입력 후 Enter"
+        className="flex-1 border border-blue-400 rounded px-1.5 py-0.5 text-xs min-w-0 focus:outline-none focus:ring-1 focus:ring-blue-400"
+      />
+    </div>
+  )
 
   // ── 트리 렌더 ──
   const renderFolder = (folder: DocFolder, depth = 0) => {
@@ -351,6 +379,8 @@ export default function DocsPage() {
         {isExpanded && (
           <>
             {subFolders.map((sub) => renderFolder(sub, depth + 1))}
+            {/* 하위 폴더 인라인 생성 입력 */}
+            {inlineFolderInput?.parentId === folder.id && renderInlineFolderInput(depth + 1)}
             {isSelected && posts.map((post) => {
               const meta = TYPE_META[post.contentType] ?? TYPE_META.NOTE
               return (
@@ -590,12 +620,7 @@ export default function DocsPage() {
       <ContextMenu
         menu={ctxMenu}
         onClose={() => setCtxMenu(null)}
-        onAddSubFolder={(parentId) => {
-          setNewFolderParentId(parentId)
-          setNewFolderName('')
-          setShowNewFolderInput(true)
-          setExpandedFolders((p) => new Set(p).add(parentId))
-        }}
+        onAddSubFolder={(parentId) => openInlineFolderInput(parentId)}
         onAddDoc={openNewDoc}
         onRename={(id, name) => { setEditingFolderId(id); setEditingFolderName(name) }}
         onDelete={handleDeleteFolder}
@@ -614,35 +639,17 @@ export default function DocsPage() {
           <div className="flex items-center justify-between p-3 border-b bg-gray-50">
             <span className="font-medium text-sm">폴더</span>
             <button
-              onClick={() => { setNewFolderParentId(null); setNewFolderName(''); setShowNewFolderInput((v) => !v) }}
+              onClick={() => openInlineFolderInput(null)}
               className="px-2 py-0.5 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
             >+ 폴더</button>
           </div>
 
-          {showNewFolderInput && (
-            <div className="p-2 border-b bg-gray-50 space-y-1.5">
-              <select
-                value={newFolderParentId === null ? 'ROOT' : String(newFolderParentId)}
-                onChange={(e) => setNewFolderParentId(e.target.value === 'ROOT' ? null : Number(e.target.value))}
-                className="w-full border rounded px-2 py-1 text-xs"
-              >
-                <option value="ROOT">최상위 폴더</option>
-                {folders.map((f) => <option key={f.id} value={f.id}>└ {f.name}</option>)}
-              </select>
-              <input autoFocus value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') setShowNewFolderInput(false) }}
-                placeholder="폴더명" className="w-full border rounded px-2 py-1 text-xs" />
-              <div className="flex gap-1">
-                <button onClick={handleCreateFolder} className="flex-1 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">생성</button>
-                <button onClick={() => setShowNewFolderInput(false)} className="flex-1 py-1 text-xs bg-gray-300 rounded hover:bg-gray-400">취소</button>
-              </div>
-            </div>
-          )}
-
-          <div className="overflow-y-auto py-1" style={{ maxHeight: 'calc(100vh - 220px)' }}>
-            {roots.length === 0
-              ? <p className="text-xs text-gray-400 text-center py-4">폴더가 없습니다.</p>
+          <div className="overflow-y-auto py-1" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+            {roots.length === 0 && !inlineFolderInput
+              ? <p className="text-xs text-gray-400 text-center py-4">+ 폴더 버튼으로 생성하세요.</p>
               : roots.map((f) => renderFolder(f))}
+            {/* 루트 레벨 인라인 생성 입력 */}
+            {inlineFolderInput?.parentId === null && renderInlineFolderInput(0)}
           </div>
 
           <div className="border-t p-2">
