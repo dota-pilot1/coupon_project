@@ -223,12 +223,22 @@ export const issueImage = sqliteTable('issue_image', {
 // 피그마 관리
 // ========================================
 
-export const figmaPost = sqliteTable('figma_post', {
+export const figmaPage = sqliteTable('figma_page', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   category: text('category').notNull().default('COMMON'),
   title: text('title').notNull(),
-  figmaUrl: text('figma_url').notNull(),
   description: text('description'),
+  author: text('author').notNull().default('admin'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const figmaItem = sqliteTable('figma_item', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  pageId: integer('page_id').notNull().references(() => figmaPage.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  figmaUrl: text('figma_url').notNull(),
+  version: text('version'),
   author: text('author').notNull().default('admin'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
@@ -236,7 +246,7 @@ export const figmaPost = sqliteTable('figma_post', {
 
 export const figmaChecklist = sqliteTable('figma_checklist', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  figmaId: integer('figma_id').notNull().references(() => figmaPost.id, { onDelete: 'cascade' }),
+  itemId: integer('item_id').notNull().references(() => figmaItem.id, { onDelete: 'cascade' }),
   content: text('content').notNull(),
   checked: integer('checked').notNull().default(0),
   createdAt: text('created_at').notNull(),
