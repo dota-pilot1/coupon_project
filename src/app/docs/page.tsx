@@ -322,6 +322,7 @@ export default function DocsPage() {
         value={inlineFolderName}
         onChange={(e) => setInlineFolderName(e.target.value)}
         onKeyDown={(e) => {
+          if (e.nativeEvent.isComposing) return
           if (e.key === 'Enter') handleCreateFolder()
           if (e.key === 'Escape') { setInlineFolderInput(null); setInlineFolderName('') }
         }}
@@ -356,6 +357,7 @@ export default function DocsPage() {
               value={editingFolderName}
               onChange={(e) => setEditingFolderName(e.target.value)}
               onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) return
                 if (e.key === 'Enter') renameFolderMutation.mutate({ id: folder.id, name: editingFolderName })
                 if (e.key === 'Escape') setEditingFolderId(null)
               }}
