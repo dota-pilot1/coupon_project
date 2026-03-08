@@ -219,6 +219,29 @@ export const issueImage = sqliteTable('issue_image', {
   createdAt: text('created_at').notNull(),
 })
 
+// ========================================
+// 피그마 관리
+// ========================================
+
+export const figmaPost = sqliteTable('figma_post', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  category: text('category').notNull().default('COMMON'),
+  title: text('title').notNull(),
+  figmaUrl: text('figma_url').notNull(),
+  description: text('description'),
+  author: text('author').notNull().default('admin'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const figmaChecklist = sqliteTable('figma_checklist', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  figmaId: integer('figma_id').notNull().references(() => figmaPost.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  checked: integer('checked').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+})
+
 export const codeDetail = sqliteTable('code_detail', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   groupCd: text('group_cd').notNull().references(() => codeGroup.groupCd, { onDelete: 'cascade' }),

@@ -137,6 +137,16 @@ export default function Header() {
             >
               코드 리뷰
             </Link>
+            <Link
+              href="/figma"
+              className={`flex items-center px-4 py-2 text-sm rounded-t transition-colors ${
+                pathname.startsWith('/figma')
+                  ? 'bg-pink-600 text-white font-medium'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              피그마 관리
+            </Link>
           </nav>
         </div>
 

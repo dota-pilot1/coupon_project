@@ -759,6 +759,18 @@ export default function IssuePage() {
                   )}
                 </div>
 
+                {/* MMD 다이어그램 섹션 */}
+                {issueDetail?.mmdContent && (
+                  <div className="border rounded-lg overflow-hidden mt-3">
+                    <div className="px-3 py-2 bg-gray-50 border-b">
+                      <span className="text-sm font-semibold text-gray-700">Mermaid 다이어그램</span>
+                    </div>
+                    <div className="p-3">
+                      <MermaidChart chart={issueDetail.mmdContent} />
+                    </div>
+                  </div>
+                )}
+
                 {/* 체크리스트 섹션 */}
                 <div className="border rounded mt-3">
                   <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b">
@@ -832,18 +844,6 @@ export default function IssuePage() {
                     </button>
                   </div>
                 </div>
-
-                {/* MMD 다이어그램 섹션 */}
-                {issueDetail?.mmdContent && (
-                  <div className="border rounded-lg overflow-hidden mt-3">
-                    <div className="px-3 py-2 bg-gray-50 border-b">
-                      <span className="text-sm font-semibold text-gray-700">Mermaid 다이어그램</span>
-                    </div>
-                    <div className="p-3">
-                      <MermaidChart chart={issueDetail.mmdContent} />
-                    </div>
-                  </div>
-                )}
               </>
             ) : (
               <p className="text-center text-sm text-gray-400 mt-16">이슈를 선택하거나 신규 버튼을 클릭하세요.</p>
