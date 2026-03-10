@@ -18,15 +18,21 @@ type DocFolder = {
   sortOrder: number
 }
 
+type DocBlock = {
+  id?: number
+  blockType: ContentType
+  content: string
+  sortOrder?: number
+}
+
 type DocPost = {
   id: number
   folderId: number
   title: string
-  content: string
-  contentType: ContentType
   author: string
   createdAt: string
   updatedAt: string
+  blocks?: DocBlock[]
 }
 
 const TYPE_META: Record<ContentType, { icon: string; label: string; color: string }> = {
@@ -63,7 +69,7 @@ function ContextMenu({
   menu: CtxMenu
   onClose: () => void
   onAddSubFolder: (parentId: number) => void
-  onAddDoc: (folderId: number, type: ContentType) => void
+  onAddDoc: (folderId: number) => void
   onRename: (id: number, name: string) => void
   onDelete: (id: number, name: string) => void
 }) {
@@ -89,12 +95,10 @@ function ContextMenu({
         <span>📁</span> 하위 폴더 추가
       </button>
       <div className="border-t my-1" />
-      {(Object.entries(TYPE_META) as [ContentType, typeof TYPE_META[ContentType]][]).map(([type, meta]) => (
-        <button key={type} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2"
-          onClick={() => { onAddDoc(menu.folderId, type); onClose() }}>
-          <span>{meta.icon}</span> {meta.label} 추가
-        </button>
-      ))}
+      <button className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2"
+        onClick={() => { onAddDoc(menu.folderId); onClose() }}>
+        <span>📄</span> 새 문서 추가
+      </button>
       <div className="border-t my-1" />
       <button className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2"
         onClick={() => { onRename(menu.folderId, menu.folderName); onClose() }}>
@@ -146,11 +150,9 @@ export default function DocsPage() {
   }, [])
 
   const [isEditing, setIsEditing] = useState(false)
-  const [editContentType, setEditContentType] = useState<ContentType>('NOTE')
   const [formTitle, setFormTitle] = useState('')
-  const [formContent, setFormContent] = useState('')
-  const [formFile, setFormFile] = useState<FileContent>({ url: '', filename: '', description: '' })
-  const [mmdPreview, setMmdPreview] = useState(false)
+  const [blocks, setBlocks] = useState<DocBlock[]>([])
+  const [mmdPreviewRefs, setMmdPreviewRefs] = useState<Record<number, boolean>>({})
 
   const [editingFolderId, setEditingFolderId] = useState<number | null>(null)
   const [editingFolderName, setEditingFolderName] = useState('')
@@ -173,7 +175,7 @@ export default function DocsPage() {
   })
 
   const saveMutation = useMutation({
-    mutationFn: (data: { id?: number; folderId: number; title: string; content: string; contentType: ContentType }) => {
+    mutationFn: (data: { id?: number; folderId: number; title: string; blocks: DocBlock[] }) => {
       if (data.id) {
         return fetch(`/api/docs/posts/${data.id}`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
@@ -256,46 +258,39 @@ export default function DocsPage() {
   const handlePostClick = (post: DocPost) => {
     setSelectedPostId(post.id)
     setIsEditing(false)
-    setMmdPreview(false)
+    setMmdPreviewRefs({})
   }
 
-  const openNewDoc = (folderId: number, type: ContentType) => {
+  const openNewDoc = (folderId: number) => {
     setSelectedFolderId(folderId)
     setExpandedFolders((p) => new Set(p).add(folderId))
     setSelectedPostId(null)
     setIsEditing(true)
-    setEditContentType(type)
     setFormTitle('')
-    setFormContent('')
-    setFormFile({ url: '', filename: '', description: '' })
-    setMmdPreview(false)
+    setBlocks([{ blockType: 'NOTE', content: '' }])
+    setMmdPreviewRefs({})
   }
 
   const handleEdit = () => {
     if (!postDetail) return
-    setEditContentType(postDetail.contentType)
     setFormTitle(postDetail.title)
-    if (postDetail.contentType === 'FILE') {
-      setFormFile(parseFileContent(postDetail.content))
-      setFormContent('')
-    } else {
-      setFormContent(postDetail.content)
-      setFormFile({ url: '', filename: '', description: '' })
-    }
-    setMmdPreview(false)
+    setBlocks(postDetail.blocks?.length ? [...postDetail.blocks] : [{ blockType: 'NOTE', content: '' }])
+    setMmdPreviewRefs({})
     setIsEditing(true)
   }
 
   const handleSave = () => {
     if (!formTitle.trim()) { alert('제목을 입력하세요.', '입력 오류'); return }
     if (!selectedFolderId) return
-    const content = editContentType === 'FILE' ? JSON.stringify(formFile) : formContent
+
+    // 빈 블록 필터링 방지(필요하다면 유지) 및 순서 재조정
+    const refinedBlocks = blocks.map((b, idx) => ({ ...b, sortOrder: idx }))
+
     saveMutation.mutate({
       id: selectedPostId || undefined,
       folderId: selectedFolderId,
       title: formTitle,
-      content,
-      contentType: editContentType,
+      blocks: refinedBlocks,
     })
   }
 
@@ -405,7 +400,7 @@ export default function DocsPage() {
             {/* 하위 폴더 인라인 생성 입력 */}
             {inlineFolderInput?.parentId === folder.id && renderInlineFolderInput(depth + 1)}
             {isSelected && posts.map((post) => {
-              const meta = TYPE_META[post.contentType] ?? TYPE_META.NOTE
+              const meta = post.blocks && post.blocks.length > 0 ? TYPE_META[post.blocks[0].blockType] : TYPE_META.NOTE
               return (
                 <div
                   key={post.id}
@@ -427,213 +422,222 @@ export default function DocsPage() {
     )
   }
 
-  const renderEditForm = () => (
-    <div className="space-y-3">
-      <table className="w-full border-collapse text-sm">
-        <tbody>
-          <tr>
-            <th className={thStyle} style={{ width: '80px' }}>유형</th>
-            <td className={tdStyle}>
-              <div className="flex flex-wrap gap-3">
-                {(Object.entries(TYPE_META) as [ContentType, typeof TYPE_META[ContentType]][]).map(([type, meta]) => (
-                  <label key={type} className="flex items-center gap-1.5 cursor-pointer">
-                    <input type="radio" value={type} checked={editContentType === type}
-                      onChange={() => { setEditContentType(type); setMmdPreview(false) }} />
-                    <span>{meta.icon} {meta.label}</span>
-                  </label>
-                ))}
-              </div>
-            </td>
-          </tr>
-          <tr>
-            <th className={thStyle}>제목 <span className="text-red-500">*</span></th>
-            <td className={tdStyle}>
-              <input type="text" value={formTitle} onChange={(e) => setFormTitle(e.target.value)}
-                className="w-full border rounded px-2 py-1" placeholder="문서 제목" />
-            </td>
-          </tr>
-        </tbody>
-      </table>
+  const renderEditForm = () => {
+    const updateBlock = (idx: number, prop: keyof DocBlock, val: string) => {
+      setBlocks((prev) => prev.map((b, i) => i === idx ? { ...b, [prop]: val } : b))
+    }
+    const addBlock = (type: ContentType) => {
+      setBlocks((prev) => [...prev, { blockType: type, content: '' }])
+    }
+    const removeBlock = (idx: number) => {
+      setBlocks((prev) => prev.filter((_, i) => i !== idx))
+    }
 
-      {editContentType === 'NOTE' && (
-        <div className="border rounded overflow-hidden">
-          <div className="px-3 py-2 bg-gray-50 border-b">
-            <span className="text-sm font-medium text-gray-700">📄 노트 내용</span>
-          </div>
-          <textarea value={formContent} onChange={(e) => setFormContent(e.target.value)}
-            rows={22} className="w-full px-3 py-2 text-sm font-mono border-0 resize-y focus:outline-none"
-            placeholder="마크다운 형식으로 자유롭게 작성하세요." />
-        </div>
-      )}
-
-      {editContentType === 'MMD' && (
-        <div className="border rounded overflow-hidden">
-          <div className="px-3 py-2 bg-gray-50 border-b flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700">📊 Mermaid 코드</span>
-            <button onClick={() => setMmdPreview((v) => !v)}
-              className="text-xs px-2 py-0.5 rounded border border-gray-300 bg-white hover:bg-gray-100">
-              {mmdPreview ? '편집' : '미리보기'}
-            </button>
-          </div>
-          {mmdPreview ? (
-            <div className="p-4">
-              {formContent.trim()
-                ? <MermaidChart chart={formContent} />
-                : <p className="text-sm text-gray-400 text-center py-6">코드를 입력하면 여기에 렌더링됩니다.</p>}
-            </div>
-          ) : (
-            <textarea value={formContent} onChange={(e) => setFormContent(e.target.value)}
-              rows={22} className="w-full px-3 py-2 text-sm font-mono border-0 resize-y focus:outline-none"
-              placeholder={'flowchart LR\n    A[시작] --> B[끝]'} />
-          )}
-        </div>
-      )}
-
-      {editContentType === 'FIGMA' && (
-        <div className="border rounded overflow-hidden">
-          <div className="px-3 py-2 bg-gray-50 border-b">
-            <span className="text-sm font-medium text-gray-700">🎨 Figma URL</span>
-          </div>
-          <div className="p-3 space-y-2">
-            <input type="url" value={formContent} onChange={(e) => setFormContent(e.target.value)}
-              className="w-full border rounded px-2 py-1.5 text-sm"
-              placeholder="https://www.figma.com/file/..." />
-            <p className="text-xs text-gray-400">Figma 공유 링크를 입력하면 임베드로 표시됩니다.</p>
-          </div>
-        </div>
-      )}
-
-      {editContentType === 'FILE' && (
-        <div className="border rounded overflow-hidden">
-          <div className="px-3 py-2 bg-gray-50 border-b">
-            <span className="text-sm font-medium text-gray-700">📎 파일 링크</span>
-          </div>
-          <div className="p-3 space-y-2">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">URL <span className="text-red-500">*</span></label>
-              <input type="url" value={formFile.url} onChange={(e) => setFormFile((p) => ({ ...p, url: e.target.value }))}
-                className="w-full border rounded px-2 py-1.5 text-sm"
-                placeholder="https://drive.google.com/... 또는 S3 URL" />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">파일명</label>
-              <input type="text" value={formFile.filename} onChange={(e) => setFormFile((p) => ({ ...p, filename: e.target.value }))}
-                className="w-full border rounded px-2 py-1.5 text-sm" placeholder="파일명.pdf" />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">설명</label>
-              <textarea value={formFile.description} onChange={(e) => setFormFile((p) => ({ ...p, description: e.target.value }))}
-                rows={3} className="w-full border rounded px-2 py-1.5 text-sm resize-y"
-                placeholder="파일에 대한 설명을 입력하세요." />
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-
-  const renderDetail = (post: DocPost) => {
-    const meta = TYPE_META[post.contentType] ?? TYPE_META.NOTE
     return (
-      <>
-        <table className="w-full border-collapse text-sm mb-4">
+      <div className="space-y-4 text-sm">
+        {/* 제목 설정 부분 */}
+        <table className="w-full border-collapse">
           <tbody>
             <tr>
-              <th className={thStyle} style={{ width: '80px' }}>유형</th>
+              <th className={thStyle} style={{ width: '80px' }}>제목 <span className="text-red-500">*</span></th>
               <td className={tdStyle}>
-                <span className={`inline-block px-2 py-0.5 text-xs rounded ${meta.color}`}>
-                  {meta.icon} {meta.label}
-                </span>
+                <input type="text" value={formTitle} onChange={(e) => setFormTitle(e.target.value)}
+                  className="w-full border rounded px-2 py-1.5" placeholder="문서 제목" />
               </td>
-              <th className={thStyle} style={{ width: '60px' }}>작성자</th>
-              <td className={tdStyle}>{post.author}</td>
-            </tr>
-            <tr>
-              <th className={thStyle}>제목</th>
-              <td className={tdStyle} colSpan={3}><span className="font-medium">{post.title}</span></td>
-            </tr>
-            <tr>
-              <th className={thStyle}>작성일</th>
-              <td className={tdStyle}>{post.createdAt.slice(0, 10)}</td>
-              <th className={thStyle}>수정일</th>
-              <td className={tdStyle}>{post.updatedAt.slice(0, 10)}</td>
             </tr>
           </tbody>
         </table>
 
-        {post.contentType === 'NOTE' && (
-          <div className="border rounded overflow-hidden">
-            <div className="px-3 py-2 bg-gray-50 border-b">
-              <span className="text-sm font-medium text-gray-700">📄 내용</span>
-            </div>
-            <div className="p-4">
-              <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                {post.content || <span className="text-gray-400">내용이 없습니다.</span>}
-              </pre>
-            </div>
-          </div>
-        )}
-
-        {post.contentType === 'MMD' && (
-          <div className="border rounded overflow-hidden">
-            <div className="px-3 py-2 bg-gray-50 border-b">
-              <span className="text-sm font-medium text-gray-700">📊 다이어그램</span>
-            </div>
-            <div className="p-4">
-              {post.content.trim()
-                ? <MermaidChart chart={post.content} />
-                : <p className="text-sm text-gray-400 text-center py-6">내용이 없습니다.</p>}
-            </div>
-          </div>
-        )}
-
-        {post.contentType === 'FIGMA' && (
-          <div className="border rounded overflow-hidden">
-            <div className="px-3 py-2 bg-gray-50 border-b flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700">🎨 Figma</span>
-              {post.content && (
-                <a href={post.content} target="_blank" rel="noopener noreferrer"
-                  className="text-xs text-blue-500 hover:underline">새 탭에서 열기 ↗</a>
-              )}
-            </div>
-            <div>
-              {post.content.trim() ? (
-                <iframe
-                  src={`https://www.figma.com/embed?embed_host=share&url=${encodeURIComponent(post.content)}`}
-                  className="w-full" style={{ height: '500px', border: 'none' }} allowFullScreen />
-              ) : (
-                <p className="text-sm text-gray-400 text-center py-6 p-4">URL이 없습니다.</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {post.contentType === 'FILE' && (() => {
-          const file = parseFileContent(post.content)
-          return (
-            <div className="border rounded overflow-hidden">
-              <div className="px-3 py-2 bg-gray-50 border-b">
-                <span className="text-sm font-medium text-gray-700">📎 파일 링크</span>
-              </div>
-              <div className="p-4 space-y-3">
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded border">
-                  <span className="text-2xl">📎</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{file.filename || '파일'}</p>
-                    <a href={file.url} target="_blank" rel="noopener noreferrer"
-                      className="text-xs text-blue-500 hover:underline truncate block">{file.url}</a>
+        {/* 블록 편집 리스트 */}
+        <div className="space-y-3">
+          {blocks.map((block, idx) => {
+            const meta = TYPE_META[block.blockType] ?? TYPE_META.NOTE
+            return (
+              <div key={idx} className="border rounded overflow-hidden shadow-sm relative group bg-white">
+                <div className="px-3 py-2 bg-gray-50 border-b flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400 font-bold px-1">{idx + 1}.</span>
+                    <span className={`px-2 py-0.5 text-xs rounded ${meta.color}`}>{meta.icon} {meta.label}</span>
                   </div>
-                  <a href={file.url} target="_blank" rel="noopener noreferrer"
-                    className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 shrink-0">열기</a>
+                  <div className="flex items-center gap-2">
+                    {block.blockType === 'MMD' && (
+                      <button onClick={() => setMmdPreviewRefs((p) => ({ ...p, [idx]: !p[idx] }))}
+                        className="text-xs px-2 py-1 rounded border border-gray-300 bg-white hover:bg-gray-100">
+                        {mmdPreviewRefs[idx] ? '편집' : '미리보기'}
+                      </button>
+                    )}
+                    <button onClick={() => removeBlock(idx)}
+                      className="text-xs px-2 py-1 bg-red-50 text-red-500 hover:bg-red-100 rounded border border-red-200">
+                      삭제
+                    </button>
+                  </div>
                 </div>
-                {file.description && (
-                  <p className="text-sm text-gray-600 whitespace-pre-wrap">{file.description}</p>
-                )}
+
+                <div className="p-0">
+                  {block.blockType === 'NOTE' && (
+                    <textarea value={block.content} onChange={(e) => updateBlock(idx, 'content', e.target.value)}
+                      rows={10} className="w-full px-3 py-2 text-sm font-mono border-0 resize-y focus:outline-none"
+                      placeholder="마크다운 형식으로 자유롭게 작성하세요." />
+                  )}
+
+                  {block.blockType === 'MMD' && (
+                    <>
+                      {mmdPreviewRefs[idx] ? (
+                        <div className="p-4 bg-white">
+                          {block.content.trim()
+                            ? <MermaidChart chart={block.content} />
+                            : <p className="text-sm text-gray-400 text-center py-6">코드를 입력하면 렌더링됩니다.</p>}
+                        </div>
+                      ) : (
+                        <textarea value={block.content} onChange={(e) => updateBlock(idx, 'content', e.target.value)}
+                          rows={10} className="w-full px-3 py-2 text-sm font-mono border-0 resize-y focus:outline-none"
+                          placeholder={'flowchart LR\n    A[시작] --> B[끝]'} />
+                      )}
+                    </>
+                  )}
+
+                  {block.blockType === 'FIGMA' && (
+                    <div className="p-3 bg-white">
+                      <input type="url" value={block.content} onChange={(e) => updateBlock(idx, 'content', e.target.value)}
+                        className="w-full border rounded px-2 py-1.5 text-sm"
+                        placeholder="https://www.figma.com/file/..." />
+                      <p className="text-xs text-gray-400 mt-1">Figma 공유 링크 임베드 전용</p>
+                    </div>
+                  )}
+
+                  {block.blockType === 'FILE' && (() => {
+                    const fileObj = parseFileContent(block.content)
+                    const setFileProp = (prop: string, val: string) => updateBlock(idx, 'content', JSON.stringify({ ...fileObj, [prop]: val }))
+                    return (
+                      <div className="p-3 space-y-2 bg-white">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">URL <span className="text-red-500">*</span></label>
+                          <input type="url" value={fileObj.url} onChange={(e) => setFileProp('url', e.target.value)}
+                            className="w-full border rounded px-2 py-1.5 text-sm" placeholder="https://drive.google.com/..." />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">파일명</label>
+                            <input type="text" value={fileObj.filename} onChange={(e) => setFileProp('filename', e.target.value)}
+                              className="w-full border rounded px-2 py-1.5 text-sm" placeholder="파일명.pdf" />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">설명</label>
+                            <input type="text" value={fileObj.description} onChange={(e) => setFileProp('description', e.target.value)}
+                              className="w-full border rounded px-2 py-1.5 text-sm" placeholder="설명" />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
               </div>
-            </div>
-          )
-        })()}
-      </>
+            )
+          })}
+        </div>
+
+        {/* 블록 추가 버튼 영역 */}
+        <div className="flex items-center gap-2 pt-2 border-t border-dashed border-gray-300">
+          <span className="text-xs text-gray-500 mr-2">블록 추가:</span>
+          {(Object.entries(TYPE_META) as [ContentType, typeof TYPE_META[ContentType]][]).map(([type, meta]) => (
+            <button key={type} onClick={() => addBlock(type)}
+              className="px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 flex items-center gap-1">
+              {meta.icon} {meta.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const renderDetail = (post: DocPost) => {
+    return (
+      <div className="space-y-4">
+        {/* 상단 기본정보 */}
+        <table className="w-full border-collapse text-sm mb-6">
+          <tbody>
+            <tr>
+              <th className={thStyle} style={{ width: '80px' }}>제목</th>
+              <td className={tdStyle} colSpan={3}><span className="font-bold text-base">{post.title}</span></td>
+            </tr>
+            <tr>
+              <th className={thStyle} style={{ width: '80px' }}>작성자</th>
+              <td className={tdStyle}>{post.author}</td>
+              <th className={thStyle} style={{ width: '80px' }}>등록일자</th>
+              <td className={tdStyle}>{post.createdAt.slice(0, 10)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* 블록 렌더링 목록 */}
+        <div className="space-y-6">
+          {(!post.blocks || post.blocks.length === 0) ? (
+            <p className="text-sm text-gray-400 text-center py-6">편집 모드에서 블록을 추가하여 내용을 작성해보세요.</p>
+          ) : (
+            post.blocks.map((block, idx) => {
+              const meta = TYPE_META[block.blockType] ?? TYPE_META.NOTE
+              return (
+                <div key={idx} className="border rounded shadow-sm overflow-hidden mb-4">
+                  <div className="px-3 py-1.5 bg-gray-50 border-b flex items-center gap-2 text-sm text-gray-700 font-medium">
+                    <span>{meta.icon}</span> {meta.label}
+                  </div>
+
+                  {block.blockType === 'NOTE' && (
+                    <div className="p-4 bg-white">
+                      <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
+                        {block.content || <span className="text-gray-400">내용이 없습니다.</span>}
+                      </pre>
+                    </div>
+                  )}
+
+                  {block.blockType === 'MMD' && (
+                    <div className="p-4 bg-white">
+                      {block.content.trim()
+                        ? <MermaidChart chart={block.content} />
+                        : <p className="text-sm text-gray-400 text-center py-4">다이어그램 스크립트가 비어있습니다.</p>}
+                    </div>
+                  )}
+
+                  {block.blockType === 'FIGMA' && (
+                    <div className="bg-white">
+                      {block.content.trim() ? (
+                        <iframe
+                          src={`https://www.figma.com/embed?embed_host=share&url=${encodeURIComponent(block.content)}`}
+                          className="w-full" style={{ height: '500px', border: 'none' }} allowFullScreen />
+                      ) : (
+                        <p className="text-sm text-gray-400 text-center py-6">URL이 연결되지 않았습니다.</p>
+                      )}
+                    </div>
+                  )}
+
+                  {block.blockType === 'FILE' && (() => {
+                    const file = parseFileContent(block.content)
+                    return (
+                      <div className="p-4 bg-white space-y-3">
+                        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded border">
+                          <span className="text-2xl">📎</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{file.filename || '첨부파일'}</p>
+                            <a href={file.url} target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-blue-500 hover:underline truncate block">{file.url}</a>
+                          </div>
+                          <a href={file.url} target="_blank" rel="noopener noreferrer"
+                            className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 shrink-0 shadow-sm">
+                            새 창으로 열기
+                          </a>
+                        </div>
+                        {file.description && (
+                          <p className="text-sm text-gray-600 whitespace-pre-wrap px-1">{file.description}</p>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
     )
   }
 
@@ -710,7 +714,8 @@ export default function DocsPage() {
                   <p className="text-sm text-gray-400 text-center py-4">폴더에서 우클릭 → 문서 추가</p>
                 ) : (
                   posts.map((post) => {
-                    const meta = TYPE_META[post.contentType] ?? TYPE_META.NOTE
+                    const primaryType = post.blocks?.[0]?.blockType ?? 'NOTE'
+                    const meta = TYPE_META[primaryType] ?? TYPE_META.NOTE
                     return (
                       <div key={post.id} onClick={() => handlePostClick(post)}
                         className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${selectedPostId === post.id ? 'bg-blue-50 border-l-2 border-blue-500' : 'hover:bg-gray-50'
@@ -731,7 +736,7 @@ export default function DocsPage() {
             <div className="flex items-center justify-between p-3 border-b bg-gray-50">
               <span className="font-medium text-sm">
                 {isEditing
-                  ? `${TYPE_META[editContentType]?.icon} ${selectedPostId ? '수정' : '새 문서'} — ${TYPE_META[editContentType]?.label}`
+                  ? `📄 ${selectedPostId ? '문서 수정' : '새 문서'}`
                   : '문서 상세'}
               </span>
               <div className="flex gap-1">

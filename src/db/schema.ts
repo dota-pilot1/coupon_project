@@ -311,9 +311,19 @@ export const docPost = sqliteTable('doc_post', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   folderId: integer('folder_id').notNull().references(() => docFolder.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
-  content: text('content').notNull().default(''),
+  content: text('content').notNull().default(''), // 하위 호환성 유지용 (이후 블록으로 분리됨)
   contentType: text('content_type').notNull().default('NOTE'), // NOTE | MMD | FIGMA | FILE
   author: text('author').notNull().default('admin'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const docBlock = sqliteTable('doc_block', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  postId: integer('post_id').notNull().references(() => docPost.id, { onDelete: 'cascade' }),
+  blockType: text('block_type').notNull().default('NOTE'), // NOTE | MMD | FIGMA | FILE
+  content: text('content').notNull().default(''),
   sortOrder: integer('sort_order').notNull().default(0),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
