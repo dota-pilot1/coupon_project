@@ -400,7 +400,8 @@ export default function DocsPage() {
             {/* 하위 폴더 인라인 생성 입력 */}
             {inlineFolderInput?.parentId === folder.id && renderInlineFolderInput(depth + 1)}
             {isSelected && posts.map((post) => {
-              const meta = post.blocks && post.blocks.length > 0 ? TYPE_META[post.blocks[0].blockType] : TYPE_META.NOTE
+              const primaryType = post.blocks?.[0]?.blockType ?? (post as any).contentType ?? 'NOTE'
+              const meta = TYPE_META[primaryType as ContentType] ?? TYPE_META.NOTE
               return (
                 <div
                   key={post.id}
@@ -714,8 +715,8 @@ export default function DocsPage() {
                   <p className="text-sm text-gray-400 text-center py-4">폴더에서 우클릭 → 문서 추가</p>
                 ) : (
                   posts.map((post) => {
-                    const primaryType = post.blocks?.[0]?.blockType ?? 'NOTE'
-                    const meta = TYPE_META[primaryType] ?? TYPE_META.NOTE
+                    const primaryType = post.blocks?.[0]?.blockType ?? (post as any).contentType ?? 'NOTE'
+                    const meta = TYPE_META[primaryType as ContentType] ?? TYPE_META.NOTE
                     return (
                       <div key={post.id} onClick={() => handlePostClick(post)}
                         className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${selectedPostId === post.id ? 'bg-blue-50 border-l-2 border-blue-500' : 'hover:bg-gray-50'
@@ -736,7 +737,7 @@ export default function DocsPage() {
             <div className="flex items-center justify-between p-3 border-b bg-gray-50">
               <span className="font-medium text-sm">
                 {isEditing
-                  ? `📄 ${selectedPostId ? '문서 수정' : '새 문서'}`
+                  ? `📄 ${selectedPostId ? '문서 편집' : '새 문서'}`
                   : '문서 상세'}
               </span>
               <div className="flex gap-1">
@@ -749,7 +750,7 @@ export default function DocsPage() {
                   </>
                 ) : selectedPostId ? (
                   <>
-                    <button onClick={handleEdit} className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700">수정</button>
+                    <button onClick={handleEdit} className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700">편집</button>
                     <button onClick={handleDelete} className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600">삭제</button>
                   </>
                 ) : null}

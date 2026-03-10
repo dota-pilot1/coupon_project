@@ -12,7 +12,22 @@ export async function GET(
   const post = db.select().from(docPost).where(eq(docPost.id, Number(postId))).get()
   if (!post) return NextResponse.json({ error: '문서를 찾을 수 없습니다.' }, { status: 404 })
 
-  const blocks = db.select().from(docBlock).where(eq(docBlock.postId, post.id)).orderBy(docBlock.sortOrder).all()
+  let blocks = db.select().from(docBlock).where(eq(docBlock.postId, post.id)).orderBy(docBlock.sortOrder).all()
+
+  // 하위 호환성 처리 (기존 데이터가 docBlock에 없는 경우 docPost.content를 임시 블록으로 매핑)
+  if (blocks.length === 0 && post.content) {
+    blocks = [
+      {
+        id: -1,
+        postId: post.id,
+        blockType: post.contentType || 'NOTE',
+        content: post.content,
+        sortOrder: 0,
+        createdAt: post.createdAt,
+        updatedAt: post.updatedAt,
+      },
+    ] as any
+  }
 
   return NextResponse.json({ ...post, blocks })
 }
