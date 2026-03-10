@@ -30,9 +30,9 @@ type DocPost = {
 }
 
 const TYPE_META: Record<ContentType, { icon: string; label: string; color: string }> = {
-  NOTE: { icon: '📄', label: '노트',      color: 'bg-green-100 text-green-700' },
-  MMD:  { icon: '📊', label: 'Mermaid',   color: 'bg-purple-100 text-purple-700' },
-  FIGMA:{ icon: '🎨', label: 'Figma',     color: 'bg-pink-100 text-pink-700' },
+  NOTE: { icon: '📄', label: '노트', color: 'bg-green-100 text-green-700' },
+  MMD: { icon: '📊', label: 'Mermaid', color: 'bg-purple-100 text-purple-700' },
+  FIGMA: { icon: '🎨', label: 'Figma', color: 'bg-pink-100 text-pink-700' },
   FILE: { icon: '📎', label: '파일 링크', color: 'bg-blue-100 text-blue-700' },
 }
 
@@ -122,6 +122,28 @@ export default function DocsPage() {
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null)
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null)
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set())
+
+  const [sidebarWidth, setSidebarWidth] = useState(250)
+  const isResizing = useRef(false)
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current) return
+      setSidebarWidth(Math.max(200, Math.min(800, e.clientX - 24)))
+    }
+    const handleMouseUp = () => {
+      if (isResizing.current) {
+        isResizing.current = false
+        document.body.style.cursor = 'default'
+      }
+    }
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [])
 
   const [isEditing, setIsEditing] = useState(false)
   const [editContentType, setEditContentType] = useState<ContentType>('NOTE')
@@ -342,9 +364,8 @@ export default function DocsPage() {
     return (
       <div key={folder.id}>
         <div
-          className={`group flex items-center gap-1 py-1.5 cursor-pointer rounded text-sm transition-colors ${
-            isSelected ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-          }`}
+          className={`group flex items-center gap-1 py-1.5 cursor-pointer rounded text-sm transition-colors ${isSelected ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+            }`}
           style={{ paddingLeft: `${depth * 14 + 8}px`, paddingRight: '4px' }}
           onClick={() => handleFolderClick(folder.id)}
           onContextMenu={(e) => openCtxMenu(e, folder)}
@@ -389,11 +410,10 @@ export default function DocsPage() {
                 <div
                   key={post.id}
                   onClick={() => handlePostClick(post)}
-                  className={`flex items-center gap-1.5 py-1 cursor-pointer rounded text-sm transition-colors ${
-                    selectedPostId === post.id
-                      ? 'bg-blue-100 text-blue-800 font-medium'
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
+                  className={`flex items-center gap-1.5 py-1 cursor-pointer rounded text-sm transition-colors ${selectedPostId === post.id
+                    ? 'bg-blue-100 text-blue-800 font-medium'
+                    : 'text-gray-600 hover:bg-gray-50'
+                    }`}
                   style={{ paddingLeft: `${(depth + 1) * 14 + 8}px`, paddingRight: '8px' }}
                 >
                   <span className="text-xs shrink-0">{meta.icon}</span>
@@ -634,10 +654,13 @@ export default function DocsPage() {
         </div>
       </div>
 
-      <div className="flex gap-4 items-start">
+      <div className="flex items-stretch" style={{ minHeight: 'calc(100vh - 120px)' }}>
 
         {/* ── 좌: 트리 ── */}
-        <div className="w-[220px] shrink-0 bg-white rounded border flex flex-col">
+        <div
+          className="shrink-0 bg-white rounded border flex flex-col h-full"
+          style={{ width: `${sidebarWidth}px`, maxHeight: 'calc(100vh - 120px)' }}
+        >
           <div className="flex items-center justify-between p-3 border-b bg-gray-50">
             <span className="font-medium text-sm">폴더</span>
             <button
@@ -659,8 +682,20 @@ export default function DocsPage() {
           </div>
         </div>
 
+        {/* ── 크기 조절 핸들 ── */}
+        <div
+          className="w-4 cursor-col-resize flex flex-col justify-center items-center group z-10 mx-[-2px]"
+          onMouseDown={(e) => {
+            e.preventDefault()
+            isResizing.current = true
+            document.body.style.cursor = 'col-resize'
+          }}
+        >
+          <div className="w-[1px] h-full bg-gray-200 group-hover:bg-blue-400 group-active:bg-blue-500 transition-colors"></div>
+        </div>
+
         {/* ── 우: 목록 + 상세 ── */}
-        <div className="flex-1 min-w-0 flex flex-col gap-4">
+        <div className="flex-1 min-w-0 flex flex-col gap-4 pl-1">
 
           {selectedFolderId && (
             <div className="bg-white rounded border">
@@ -678,9 +713,8 @@ export default function DocsPage() {
                     const meta = TYPE_META[post.contentType] ?? TYPE_META.NOTE
                     return (
                       <div key={post.id} onClick={() => handlePostClick(post)}
-                        className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${
-                          selectedPostId === post.id ? 'bg-blue-50 border-l-2 border-blue-500' : 'hover:bg-gray-50'
-                        }`}>
+                        className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${selectedPostId === post.id ? 'bg-blue-50 border-l-2 border-blue-500' : 'hover:bg-gray-50'
+                          }`}>
                         <span>{meta.icon}</span>
                         <span className="flex-1 text-sm font-medium truncate">{post.title}</span>
                         <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${meta.color}`}>{meta.label}</span>
@@ -719,11 +753,11 @@ export default function DocsPage() {
             <div className="p-4">
               {isEditing ? renderEditForm()
                 : postDetail ? renderDetail(postDetail)
-                : (
-                  <div className="flex items-center justify-center h-[300px] text-gray-400 text-sm">
-                    {selectedFolderId ? '폴더에서 우클릭 → 문서 추가' : '좌측에서 폴더를 선택하세요.'}
-                  </div>
-                )}
+                  : (
+                    <div className="flex items-center justify-center h-[300px] text-gray-400 text-sm">
+                      {selectedFolderId ? '폴더에서 우클릭 → 문서 추가' : '좌측에서 폴더를 선택하세요.'}
+                    </div>
+                  )}
             </div>
           </div>
         </div>
