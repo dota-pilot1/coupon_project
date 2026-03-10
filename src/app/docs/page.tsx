@@ -1,64 +1,21 @@
 'use client'
 
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import dynamic from 'next/dynamic'
 import { useConfirmDialog } from '@/components/ConfirmDialog'
 import { toast } from 'sonner'
 
 const MermaidChart = dynamic(() => import('@/components/MermaidChart'), { ssr: false })
 
-// ── 타입 ──────────────────────────────────────────────
-type ContentType = 'NOTE' | 'MMD' | 'FIGMA' | 'FILE'
-
-type DocFolder = {
-  id: number
-  name: string
-  parentId: number | null
-  sortOrder: number
-}
-
-type DocBlock = {
-  id?: number
-  blockType: ContentType
-  content: string
-  sortOrder?: number
-}
-
-type DocPost = {
-  id: number
-  folderId: number
-  title: string
-  author: string
-  createdAt: string
-  updatedAt: string
-  blocks?: DocBlock[]
-}
-
-const TYPE_META: Record<ContentType, { icon: string; label: string; color: string }> = {
-  NOTE: { icon: '📄', label: '노트', color: 'bg-green-100 text-green-700' },
-  MMD: { icon: '📊', label: 'Mermaid', color: 'bg-purple-100 text-purple-700' },
-  FIGMA: { icon: '🎨', label: 'Figma', color: 'bg-pink-100 text-pink-700' },
-  FILE: { icon: '📎', label: '파일 링크', color: 'bg-blue-100 text-blue-700' },
-}
-
-type FileContent = { url: string; filename: string; description: string }
-function parseFileContent(raw: string): FileContent {
-  try { return JSON.parse(raw) } catch { return { url: raw, filename: '', description: '' } }
-}
-
-function buildTree(folders: DocFolder[]) {
-  const roots: DocFolder[] = []
-  const children: Record<number, DocFolder[]> = {}
-  for (const f of folders) {
-    if (f.parentId === null) roots.push(f)
-    else {
-      if (!children[f.parentId]) children[f.parentId] = []
-      children[f.parentId].push(f)
-    }
-  }
-  return { roots, children }
-}
+import {
+  type ContentType,
+  type DocFolder,
+  type DocBlock,
+  type DocPost,
+  TYPE_META,
+  parseFileContent,
+  buildTree
+} from '@/entities/docs/model/types'
 
 // ── 컨텍스트 메뉴 ──────────────────────────────────────
 type CtxMenu = { x: number; y: number; folderId: number; folderName: string } | null
@@ -112,15 +69,22 @@ function ContextMenu({
   )
 }
 
+import {
+  useDocFolders,
+  useDocPosts,
+  useDocPostDetail,
+  useSavePostMutation,
+  useDeletePostMutation,
+  useCreateFolderMutation,
+  useRenameFolderMutation,
+  useDeleteFolderMutation
+} from '@/entities/docs/api/queries'
+
 // ── 메인 ──────────────────────────────────────────────
 export default function DocsPage() {
-  const queryClient = useQueryClient()
   const { confirm, alert } = useConfirmDialog()
 
-  const { data: folders = [] } = useQuery<DocFolder[]>({
-    queryKey: ['docFolders'],
-    queryFn: () => fetch('/api/docs/folders').then((r) => r.json()),
-  })
+  const { data: folders = [] } = useDocFolders()
   const { roots, children: folderChildren } = useMemo(() => buildTree(folders), [folders])
 
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null)
@@ -162,85 +126,32 @@ export default function DocsPage() {
 
   const [ctxMenu, setCtxMenu] = useState<CtxMenu>(null)
 
-  const { data: posts = [] } = useQuery<DocPost[]>({
-    queryKey: ['docPosts', selectedFolderId],
-    queryFn: () => fetch(`/api/docs/posts?folderId=${selectedFolderId}`).then((r) => r.json()),
-    enabled: !!selectedFolderId,
+  const { data: posts = [] } = useDocPosts(selectedFolderId)
+  const { data: postDetail } = useDocPostDetail(selectedPostId, isEditing)
+
+  const saveMutation = useSavePostMutation(selectedFolderId, selectedPostId, (newId) => {
+    setSelectedPostId(newId)
+    setIsEditing(false)
   })
 
-  const { data: postDetail } = useQuery<DocPost>({
-    queryKey: ['docPost', selectedPostId],
-    queryFn: () => fetch(`/api/docs/posts/${selectedPostId}`).then((r) => r.json()),
-    enabled: !!selectedPostId && !isEditing,
+  const deleteMutation = useDeletePostMutation(selectedFolderId, () => {
+    setSelectedPostId(null)
+    setIsEditing(false)
   })
 
-  const saveMutation = useMutation({
-    mutationFn: (data: { id?: number; folderId: number; title: string; blocks: DocBlock[] }) => {
-      if (data.id) {
-        return fetch(`/api/docs/posts/${data.id}`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
-        }).then((r) => r.json())
-      }
-      return fetch('/api/docs/posts', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
-      }).then((r) => r.json())
-    },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['docPosts', selectedFolderId] })
-      const newId = result.id || selectedPostId
-      if (newId) {
-        setSelectedPostId(Number(newId))
-        queryClient.invalidateQueries({ queryKey: ['docPost', Number(newId)] })
-      }
-      setIsEditing(false)
-      toast.success('저장되었습니다.')
-    },
+  const createFolderMutation = useCreateFolderMutation((parentId) => {
+    setInlineFolderInput(null)
+    setInlineFolderName('')
+    if (parentId !== null) setExpandedFolders((p) => new Set(p).add(parentId))
   })
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => fetch(`/api/docs/posts/${id}`, { method: 'DELETE' }).then((r) => r.json()),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['docPosts', selectedFolderId] })
-      setSelectedPostId(null)
-      setIsEditing(false)
-      toast.success('삭제되었습니다.')
-    },
+  const renameFolderMutation = useRenameFolderMutation(() => {
+    setEditingFolderId(null)
   })
 
-  const createFolderMutation = useMutation({
-    mutationFn: (data: { name: string; parentId: number | null }) =>
-      fetch('/api/docs/folders', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
-      }).then((r) => r.json()),
-    onSuccess: (created: DocFolder) => {
-      queryClient.invalidateQueries({ queryKey: ['docFolders'] })
-      setInlineFolderInput(null)
-      setInlineFolderName('')
-      if (created.parentId !== null) setExpandedFolders((p) => new Set(p).add(created.parentId!))
-      toast.success('폴더가 생성되었습니다.')
-    },
-  })
-
-  const renameFolderMutation = useMutation({
-    mutationFn: (data: { id: number; name: string }) =>
-      fetch(`/api/docs/folders/${data.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: data.name }),
-      }).then((r) => r.json()),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['docFolders'] })
-      setEditingFolderId(null)
-      toast.success('폴더명이 수정되었습니다.')
-    },
-  })
-
-  const deleteFolderMutation = useMutation({
-    mutationFn: (id: number) => fetch(`/api/docs/folders/${id}`, { method: 'DELETE' }).then((r) => r.json()),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['docFolders'] })
-      setSelectedFolderId(null)
-      setSelectedPostId(null)
-      toast.success('폴더가 삭제되었습니다.')
-    },
+  const deleteFolderMutation = useDeleteFolderMutation(() => {
+    setSelectedFolderId(null)
+    setSelectedPostId(null)
   })
 
   const handleFolderClick = (id: number) => {
