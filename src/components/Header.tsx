@@ -167,6 +167,16 @@ export default function Header() {
             >
               문서 관리
             </Link>
+            <Link
+              href="/tasks"
+              className={`flex items-center px-4 py-2 text-sm rounded-t transition-colors ${
+                pathname.startsWith('/tasks')
+                  ? 'bg-orange-600 text-white font-medium'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              Task 관리
+            </Link>
           </nav>
         </div>
 

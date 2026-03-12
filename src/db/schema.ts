@@ -328,3 +328,38 @@ export const docBlock = sqliteTable('doc_block', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 })
+
+// ========================================
+// Task 관리 (팀원별)
+// ========================================
+
+export const taskFolder = sqliteTable('task_folder', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(), // 팀원 이름
+  parentId: integer('parent_id'), // null = 최상위 폴더
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const taskPost = sqliteTable('task_post', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  folderId: integer('folder_id').notNull().references(() => taskFolder.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  content: text('content').notNull().default(''),
+  contentType: text('content_type').notNull().default('NOTE'),
+  author: text('author').notNull().default('admin'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const taskBlock = sqliteTable('task_block', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  postId: integer('post_id').notNull().references(() => taskPost.id, { onDelete: 'cascade' }),
+  blockType: text('block_type').notNull().default('NOTE'),
+  content: text('content').notNull().default(''),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
