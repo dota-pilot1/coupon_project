@@ -14,6 +14,10 @@ import {
   type DocPost,
   TYPE_META,
   parseFileContent,
+  parseDbTableContent,
+  parseTsvToColumns,
+  type DbTableContent,
+  type DbColumn,
   buildTree
 } from '@/entities/docs/model/types'
 
@@ -442,6 +446,140 @@ export default function DocsPage() {
                       </div>
                     )
                   })()}
+
+                  {block.blockType === 'DBTABLE' && (() => {
+                    const tbl = parseDbTableContent(block.content)
+                    const setTblProp = (prop: keyof DbTableContent, val: string) =>
+                      updateBlock(idx, 'content', JSON.stringify({ ...tbl, [prop]: val }))
+                    const setColumns = (cols: DbColumn[]) =>
+                      updateBlock(idx, 'content', JSON.stringify({ ...tbl, columns: cols }))
+
+                    const updateCol = (colIdx: number, prop: keyof DbColumn, val: string | boolean | number) => {
+                      const newCols = tbl.columns.map((c, i) => i === colIdx ? { ...c, [prop]: val } : c)
+                      setColumns(newCols)
+                    }
+                    const removeCol = (colIdx: number) => {
+                      setColumns(tbl.columns.filter((_, i) => i !== colIdx))
+                    }
+                    const addCol = () => {
+                      setColumns([...tbl.columns, { no: tbl.columns.length + 1, name: '', comment: '', type: 'VARCHAR', size: '', pk: false, notNull: false, note: '' }])
+                    }
+
+                    return (
+                      <div className="p-3 space-y-3 bg-white">
+                        {/* 테이블 기본 정보 */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">테이블명 <span className="text-red-500">*</span></label>
+                            <input type="text" value={tbl.tableName} onChange={(e) => setTblProp('tableName', e.target.value)}
+                              className="w-full border rounded px-2 py-1.5 text-sm font-mono" placeholder="BS_CPN_COND_MENU_M" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1">스키마</label>
+                              <input type="text" value={tbl.schema} onChange={(e) => setTblProp('schema', e.target.value)}
+                                className="w-full border rounded px-2 py-1.5 text-sm font-mono" placeholder="FSCPS" />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1">분류</label>
+                              <input type="text" value={tbl.category} onChange={(e) => setTblProp('category', e.target.value)}
+                                className="w-full border rounded px-2 py-1.5 text-sm" placeholder="쿠폰조건-메뉴" />
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">테이블 설명</label>
+                          <input type="text" value={tbl.description} onChange={(e) => setTblProp('description', e.target.value)}
+                            className="w-full border rounded px-2 py-1.5 text-sm" placeholder="어떤 메뉴를 주문해야 쿠폰이 발동되나?" />
+                        </div>
+
+                        {/* TSV 붙여넣기 영역 */}
+                        <div className="border border-dashed border-amber-300 rounded bg-amber-50 p-2">
+                          <label className="block text-xs text-amber-700 mb-1 font-medium">📋 DBeaver/Excel에서 붙여넣기 (TSV)</label>
+                          <textarea
+                            rows={3}
+                            className="w-full border rounded px-2 py-1.5 text-xs font-mono resize-y bg-white"
+                            placeholder={"No\t컬럼명\t설명\t타입\t크기\tPK\tNN\t비고\n1\tCO_ID\t회사 ID\tVARCHAR\t4\tY\tY\t"}
+                            onPaste={(e) => {
+                              const text = e.clipboardData.getData('text/plain')
+                              if (text.includes('\t')) {
+                                e.preventDefault()
+                                const parsed = parseTsvToColumns(text)
+                                if (parsed.length > 0) {
+                                  setColumns(parsed)
+                                  toast.success(`${parsed.length}개 컬럼 파싱 완료`)
+                                }
+                              }
+                            }}
+                            onChange={() => { /* 직접 타이핑 무시 - 붙여넣기 전용 */ }}
+                            value=""
+                          />
+                          <p className="text-[10px] text-amber-600 mt-1">DBeaver/Excel에서 범위 선택 후 Ctrl+C → 여기에 Ctrl+V</p>
+                        </div>
+
+                        {/* 컬럼 편집 테이블 */}
+                        {tbl.columns.length > 0 && (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs border-collapse">
+                              <thead>
+                                <tr className="bg-gray-100">
+                                  <th className="border border-gray-300 px-2 py-1.5 w-10 text-center">No</th>
+                                  <th className="border border-gray-300 px-2 py-1.5 min-w-[120px]">컬럼명</th>
+                                  <th className="border border-gray-300 px-2 py-1.5 min-w-[100px]">설명</th>
+                                  <th className="border border-gray-300 px-2 py-1.5 w-[90px]">타입</th>
+                                  <th className="border border-gray-300 px-2 py-1.5 w-[50px]">크기</th>
+                                  <th className="border border-gray-300 px-2 py-1.5 w-[35px] text-center">PK</th>
+                                  <th className="border border-gray-300 px-2 py-1.5 w-[35px] text-center">NN</th>
+                                  <th className="border border-gray-300 px-2 py-1.5 min-w-[120px]">비고</th>
+                                  <th className="border border-gray-300 px-2 py-1.5 w-[40px]"></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {tbl.columns.map((col, ci) => (
+                                  <tr key={ci} className="hover:bg-gray-50">
+                                    <td className="border border-gray-300 px-2 py-1 text-center text-gray-500">{col.no}</td>
+                                    <td className="border border-gray-300 px-1 py-0.5">
+                                      <input value={col.name} onChange={(e) => updateCol(ci, 'name', e.target.value)}
+                                        className="w-full px-1 py-0.5 text-xs font-mono border-0 focus:outline-none focus:bg-blue-50" />
+                                    </td>
+                                    <td className="border border-gray-300 px-1 py-0.5">
+                                      <input value={col.comment} onChange={(e) => updateCol(ci, 'comment', e.target.value)}
+                                        className="w-full px-1 py-0.5 text-xs border-0 focus:outline-none focus:bg-blue-50" />
+                                    </td>
+                                    <td className="border border-gray-300 px-1 py-0.5">
+                                      <input value={col.type} onChange={(e) => updateCol(ci, 'type', e.target.value)}
+                                        className="w-full px-1 py-0.5 text-xs font-mono border-0 focus:outline-none focus:bg-blue-50" />
+                                    </td>
+                                    <td className="border border-gray-300 px-1 py-0.5">
+                                      <input value={col.size} onChange={(e) => updateCol(ci, 'size', e.target.value)}
+                                        className="w-full px-1 py-0.5 text-xs text-center border-0 focus:outline-none focus:bg-blue-50" />
+                                    </td>
+                                    <td className="border border-gray-300 px-1 py-0.5 text-center">
+                                      <input type="checkbox" checked={col.pk} onChange={(e) => updateCol(ci, 'pk', e.target.checked)} />
+                                    </td>
+                                    <td className="border border-gray-300 px-1 py-0.5 text-center">
+                                      <input type="checkbox" checked={col.notNull} onChange={(e) => updateCol(ci, 'notNull', e.target.checked)} />
+                                    </td>
+                                    <td className="border border-gray-300 px-1 py-0.5">
+                                      <input value={col.note} onChange={(e) => updateCol(ci, 'note', e.target.value)}
+                                        className="w-full px-1 py-0.5 text-xs border-0 focus:outline-none focus:bg-blue-50" />
+                                    </td>
+                                    <td className="border border-gray-300 px-1 py-0.5 text-center">
+                                      <button onClick={() => removeCol(ci)} className="text-red-400 hover:text-red-600 text-xs">✕</button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            <button onClick={addCol}
+                              className="mt-1 text-xs text-gray-500 hover:text-gray-700 px-2 py-1 border border-dashed border-gray-300 rounded hover:bg-gray-50">
+                              + 행 추가
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
             )
@@ -540,6 +678,62 @@ export default function DocsPage() {
                         </div>
                         {file.description && (
                           <p className="text-sm text-gray-600 whitespace-pre-wrap px-1">{file.description}</p>
+                        )}
+                      </div>
+                    )
+                  })()}
+
+                  {block.blockType === 'DBTABLE' && (() => {
+                    const tbl = parseDbTableContent(block.content)
+                    return (
+                      <div className="p-4 bg-white space-y-3">
+                        {/* 테이블 헤더 */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="font-mono font-bold text-sm text-gray-800">{tbl.tableName || '(테이블명 없음)'}</span>
+                          {tbl.schema && <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded font-mono">{tbl.schema}</span>}
+                          {tbl.category && <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded">{tbl.category}</span>}
+                        </div>
+                        {tbl.description && (
+                          <p className="text-sm text-gray-600 bg-gray-50 rounded px-3 py-2 border-l-3 border-amber-400">
+                            💬 {tbl.description}
+                          </p>
+                        )}
+
+                        {/* 컬럼 테이블 */}
+                        {tbl.columns.length > 0 ? (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs border-collapse">
+                              <thead>
+                                <tr className="bg-gray-700 text-white">
+                                  <th className="border border-gray-600 px-3 py-2 w-10 text-center">No</th>
+                                  <th className="border border-gray-600 px-3 py-2 text-left">컬럼명</th>
+                                  <th className="border border-gray-600 px-3 py-2 text-left">설명</th>
+                                  <th className="border border-gray-600 px-3 py-2 text-left">타입</th>
+                                  <th className="border border-gray-600 px-3 py-2 w-14 text-center">크기</th>
+                                  <th className="border border-gray-600 px-3 py-2 w-10 text-center">PK</th>
+                                  <th className="border border-gray-600 px-3 py-2 w-10 text-center">NN</th>
+                                  <th className="border border-gray-600 px-3 py-2 text-left">비고</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {tbl.columns.map((col, ci) => (
+                                  <tr key={ci} className={`${col.pk ? 'bg-amber-50' : ci % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50`}>
+                                    <td className="border border-gray-200 px-3 py-1.5 text-center text-gray-500">{col.no}</td>
+                                    <td className="border border-gray-200 px-3 py-1.5 font-mono font-medium text-gray-800">{col.name}</td>
+                                    <td className="border border-gray-200 px-3 py-1.5 text-gray-700">{col.comment}</td>
+                                    <td className="border border-gray-200 px-3 py-1.5 font-mono text-blue-700">{col.type}</td>
+                                    <td className="border border-gray-200 px-3 py-1.5 text-center text-gray-600">{col.size}</td>
+                                    <td className="border border-gray-200 px-3 py-1.5 text-center">{col.pk ? <span className="text-amber-600 font-bold">✓</span> : ''}</td>
+                                    <td className="border border-gray-200 px-3 py-1.5 text-center">{col.notNull ? <span className="text-gray-600">✓</span> : ''}</td>
+                                    <td className="border border-gray-200 px-3 py-1.5 text-gray-500 text-[11px]">{col.note}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            <p className="text-[10px] text-gray-400 mt-1 text-right">{tbl.columns.length}개 컬럼</p>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-400 text-center py-4">컬럼 정보가 없습니다.</p>
                         )}
                       </div>
                     )
