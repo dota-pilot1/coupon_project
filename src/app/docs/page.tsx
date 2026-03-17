@@ -84,6 +84,41 @@ import {
   useDeleteFolderMutation
 } from '@/entities/docs/api/queries'
 
+// ── 폴더별 문서 목록 (개별 fetch) ──
+function FolderPosts({
+  folderId, depth, selectedPostId, onPostClick,
+}: {
+  folderId: number
+  depth: number
+  selectedPostId: number | null
+  onPostClick: (post: DocPost) => void
+}) {
+  const { data: posts = [] } = useDocPosts(folderId)
+  if (posts.length === 0) return null
+  return (
+    <>
+      {posts.map((post) => {
+        const primaryType = post.blocks?.[0]?.blockType ?? (post as any).contentType ?? 'NOTE'
+        const meta = TYPE_META[primaryType as ContentType] ?? TYPE_META.NOTE
+        return (
+          <div
+            key={post.id}
+            onClick={() => onPostClick(post)}
+            className={`flex items-center gap-1.5 py-1 cursor-pointer rounded text-sm transition-colors ${selectedPostId === post.id
+              ? 'bg-blue-100 text-blue-800 font-medium'
+              : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            style={{ paddingLeft: `${depth * 14 + 8}px`, paddingRight: '8px' }}
+          >
+            <span className="text-xs shrink-0">{meta.icon}</span>
+            <span className="truncate min-w-0">{post.title}</span>
+          </div>
+        )
+      })}
+    </>
+  )
+}
+
 // ── 메인 ──────────────────────────────────────────────
 export default function DocsPage() {
   const { confirm, alert } = useConfirmDialog()
@@ -314,24 +349,12 @@ export default function DocsPage() {
             {subFolders.map((sub) => renderFolder(sub, depth + 1))}
             {/* 하위 폴더 인라인 생성 입력 */}
             {inlineFolderInput?.parentId === folder.id && renderInlineFolderInput(depth + 1)}
-            {isSelected && posts.map((post) => {
-              const primaryType = post.blocks?.[0]?.blockType ?? (post as any).contentType ?? 'NOTE'
-              const meta = TYPE_META[primaryType as ContentType] ?? TYPE_META.NOTE
-              return (
-                <div
-                  key={post.id}
-                  onClick={() => handlePostClick(post)}
-                  className={`flex items-center gap-1.5 py-1 cursor-pointer rounded text-sm transition-colors ${selectedPostId === post.id
-                    ? 'bg-blue-100 text-blue-800 font-medium'
-                    : 'text-gray-600 hover:bg-gray-50'
-                    }`}
-                  style={{ paddingLeft: `${(depth + 1) * 14 + 8}px`, paddingRight: '8px' }}
-                >
-                  <span className="text-xs shrink-0">{meta.icon}</span>
-                  <span className="truncate min-w-0">{post.title}</span>
-                </div>
-              )
-            })}
+            <FolderPosts
+              folderId={folder.id}
+              depth={depth + 1}
+              selectedPostId={selectedPostId}
+              onPostClick={handlePostClick}
+            />
           </>
         )}
       </div>
