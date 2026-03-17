@@ -116,7 +116,7 @@ export default function Header() {
           <span className="font-bold text-sm mr-8 whitespace-nowrap">CJ FNB 쿠폰관리</span>
           <nav className="flex gap-1">
             <Dropdown menu={PROTO_MENU} pathname={pathname} color="bg-blue-600 text-white" />
-            <Dropdown menu={REAL_MENU} pathname={pathname} color="bg-emerald-600 text-white" />
+            {/* <Dropdown menu={REAL_MENU} pathname={pathname} color="bg-emerald-600 text-white" /> */}
             <Link
               href="/issue"
               className={`flex items-center px-4 py-2 text-sm rounded-t transition-colors ${

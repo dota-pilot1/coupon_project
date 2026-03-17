@@ -146,6 +146,9 @@ export default function IssuePage() {
   const [isCommentUploading, setIsCommentUploading] = useState(false)
   const checkImageInputRef = useRef<HTMLInputElement>(null)
   const [uploadingCheckId, setUploadingCheckId] = useState<number | null>(null)
+  const checkNewImageInputRef = useRef<HTMLInputElement>(null)
+  const [checkPendingImage, setCheckPendingImage] = useState<{ file: File; previewUrl: string } | null>(null)
+  const [isCheckAdding, setIsCheckAdding] = useState(false)
 
   // URL 해시로 이슈 선택 (링크 공유)
   useEffect(() => {
@@ -498,6 +501,7 @@ export default function IssuePage() {
     setFormMmd('')
     setMmdPreview(false)
     setCheckInput('')
+    if (checkPendingImage) { URL.revokeObjectURL(checkPendingImage.previewUrl); setCheckPendingImage(null) }
     pendingFiles.forEach((f) => URL.revokeObjectURL(f.previewUrl))
     setPendingFiles([])
   }
@@ -554,9 +558,43 @@ export default function IssuePage() {
     }
   }
 
-  const handleAddCheck = () => {
+  const handleAddCheck = async () => {
     if (!selectedIssueId || !checkInput.trim()) return
-    addCheckMutation.mutate({ issueId: selectedIssueId, content: checkInput })
+    setIsCheckAdding(true)
+    try {
+      const res = await fetch(`/api/issues/${selectedIssueId}/checklist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: checkInput.trim() }),
+      }).then((r) => r.json())
+
+      if (checkPendingImage && res.id) {
+        const { file } = checkPendingImage
+        const { presignedUrl, publicUrl } = await fetch('/api/upload/presign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, contentType: file.type }),
+        }).then((r) => r.json())
+        await fetch(presignedUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file })
+        await fetch(`/api/issues/${selectedIssueId}/checklist/${res.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageUrl: publicUrl, imageFilename: file.name }),
+        })
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['issue', selectedIssueId] })
+      setCheckInput('')
+      if (checkPendingImage) {
+        URL.revokeObjectURL(checkPendingImage.previewUrl)
+        setCheckPendingImage(null)
+      }
+      checkInputRef.current?.focus()
+    } catch {
+      toast.error('체크리스트 추가에 실패했습니다.')
+    } finally {
+      setIsCheckAdding(false)
+    }
   }
 
   const checklist = issueDetail?.checklist ?? []
@@ -1035,24 +1073,68 @@ export default function IssuePage() {
                   </div>
 
                   {/* 항목 추가 */}
-                  <div className="flex gap-2 p-2 border-t bg-gray-50">
-                    <input
-                      ref={checkInputRef}
-                      type="text"
-                      value={checkInput}
-                      onChange={(e) => setCheckInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleAddCheck() }}
-                      placeholder="체크리스트 항목 입력 후 Enter 또는 추가"
-                      className="flex-1 border rounded px-2 py-1 text-sm"
-                    />
-                    <button
-                      onClick={handleAddCheck}
-                      disabled={!checkInput.trim()}
-                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      추가
-                    </button>
+                  <div className="p-2 border-t bg-gray-50">
+                    <div className="flex gap-2">
+                      <input
+                        ref={checkInputRef}
+                        type="text"
+                        value={checkInput}
+                        onChange={(e) => setCheckInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleAddCheck() }}
+                        placeholder="체크리스트 항목 입력 후 Enter 또는 추가"
+                        className="flex-1 border rounded px-2 py-1 text-sm"
+                      />
+                      <button
+                        onClick={() => checkNewImageInputRef.current?.click()}
+                        className="px-2 py-1 text-xs border rounded text-gray-600 hover:bg-gray-100 whitespace-nowrap"
+                        title="이미지 첨부"
+                      >
+                        + 이미지 첨부
+                      </button>
+                      <button
+                        onClick={handleAddCheck}
+                        disabled={!checkInput.trim() || isCheckAdding}
+                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                      >
+                        {isCheckAdding ? '추가중...' : '추가'}
+                      </button>
+                    </div>
+                    {checkPendingImage && (
+                      <div className="mt-2 relative inline-block group/preview">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={checkPendingImage.previewUrl}
+                          alt={checkPendingImage.file.name}
+                          className="max-w-[200px] max-h-[120px] rounded border object-contain bg-gray-100"
+                        />
+                        <button
+                          onClick={() => {
+                            URL.revokeObjectURL(checkPendingImage.previewUrl)
+                            setCheckPendingImage(null)
+                          }}
+                          className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center leading-none hover:bg-red-700"
+                          title="이미지 제거"
+                        >
+                          ✕
+                        </button>
+                        <div className="text-[10px] text-gray-400 mt-0.5 truncate max-w-[200px]">{checkPendingImage.file.name}</div>
+                      </div>
+                    )}
                   </div>
+                  <input
+                    ref={checkNewImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        if (checkPendingImage) URL.revokeObjectURL(checkPendingImage.previewUrl)
+                        setCheckPendingImage({ file, previewUrl: URL.createObjectURL(file) })
+                      }
+                      if (checkNewImageInputRef.current) checkNewImageInputRef.current.value = ''
+                    }}
+                  />
                   <input
                     ref={checkImageInputRef}
                     type="file"
