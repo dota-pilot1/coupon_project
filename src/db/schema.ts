@@ -218,6 +218,8 @@ export const issueComment = sqliteTable('issue_comment', {
   issueId: integer('issue_id').notNull().references(() => issuePost.id, { onDelete: 'cascade' }),
   content: text('content').notNull(),
   author: text('author').notNull().default('admin'),
+  imageUrl: text('image_url'),
+  imageFilename: text('image_filename'),
   createdAt: text('created_at').notNull(),
 })
 

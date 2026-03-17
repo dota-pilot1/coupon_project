@@ -21,7 +21,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ issueId
   const { issueId } = await params
   const id = Number(issueId)
   const body = await req.json()
-  const { content, author } = body
+  const { content, author, imageUrl, imageFilename } = body
 
   if (!content?.trim()) {
     return NextResponse.json({ error: '댓글 내용을 입력하세요.' }, { status: 400 })
@@ -34,6 +34,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ issueId
       issueId: id,
       content: content.trim(),
       author: author || 'admin',
+      imageUrl: imageUrl || null,
+      imageFilename: imageFilename || null,
       createdAt: now,
     })
     .run()

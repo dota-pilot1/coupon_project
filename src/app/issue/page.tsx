@@ -48,6 +48,8 @@ type IssueComment = {
   issueId: number
   content: string
   author: string
+  imageUrl: string | null
+  imageFilename: string | null
   createdAt: string
 }
 
@@ -139,6 +141,9 @@ export default function IssuePage() {
   const [pendingFiles, setPendingFiles] = useState<{ file: File; previewUrl: string }[]>([])
   const [commentInput, setCommentInput] = useState('')
   const commentInputRef = useRef<HTMLTextAreaElement>(null)
+  const commentImageInputRef = useRef<HTMLInputElement>(null)
+  const [commentPendingImage, setCommentPendingImage] = useState<{ file: File; previewUrl: string } | null>(null)
+  const [isCommentUploading, setIsCommentUploading] = useState(false)
   const checkImageInputRef = useRef<HTMLInputElement>(null)
   const [uploadingCheckId, setUploadingCheckId] = useState<number | null>(null)
 
@@ -401,9 +406,49 @@ export default function IssuePage() {
     toast.success('이미지가 삭제되었습니다.')
   }
 
-  const handleAddComment = () => {
+  const handleAddComment = async () => {
     if (!selectedIssueId || !commentInput.trim()) return
-    addCommentMutation.mutate({ issueId: selectedIssueId, content: commentInput })
+
+    let imageUrl: string | null = null
+    let imageFilename: string | null = null
+
+    if (commentPendingImage) {
+      setIsCommentUploading(true)
+      try {
+        const { presignedUrl, publicUrl } = await fetch('/api/upload/presign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: commentPendingImage.file.name, contentType: commentPendingImage.file.type }),
+        }).then((r) => r.json())
+
+        await fetch(presignedUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': commentPendingImage.file.type },
+          body: commentPendingImage.file,
+        })
+
+        imageUrl = publicUrl
+        imageFilename = commentPendingImage.file.name
+      } catch {
+        toast.error('이미지 업로드에 실패했습니다.')
+        setIsCommentUploading(false)
+        return
+      }
+      setIsCommentUploading(false)
+    }
+
+    await fetch(`/api/issues/${selectedIssueId}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: commentInput, imageUrl, imageFilename }),
+    })
+
+    queryClient.invalidateQueries({ queryKey: ['issueComments', selectedIssueId] })
+    setCommentInput('')
+    if (commentPendingImage) {
+      URL.revokeObjectURL(commentPendingImage.previewUrl)
+      setCommentPendingImage(null)
+    }
   }
 
   const handleCopyLink = () => {
@@ -1048,13 +1093,54 @@ export default function IssuePage() {
                       className="w-full border rounded px-3 py-2 text-sm resize-y"
                       placeholder="댓글을 입력하세요 (Ctrl+Enter로 등록)"
                     />
-                    <div className="flex justify-end mt-2">
+                    {commentPendingImage && (
+                      <div className="mt-2 relative inline-block group">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={commentPendingImage.previewUrl}
+                          alt={commentPendingImage.file.name}
+                          className="max-w-[200px] max-h-[120px] rounded border object-contain bg-gray-100"
+                        />
+                        <button
+                          onClick={() => {
+                            URL.revokeObjectURL(commentPendingImage.previewUrl)
+                            setCommentPendingImage(null)
+                          }}
+                          className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center leading-none"
+                        >
+                          ✕
+                        </button>
+                        <div className="text-[10px] text-gray-400 mt-0.5 truncate max-w-[200px]">{commentPendingImage.file.name}</div>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center mt-2">
+                      <button
+                        type="button"
+                        onClick={() => commentImageInputRef.current?.click()}
+                        className="px-3 py-1.5 text-xs text-gray-600 border rounded hover:bg-gray-100"
+                      >
+                        + 이미지 첨부
+                      </button>
+                      <input
+                        ref={commentImageInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            if (commentPendingImage) URL.revokeObjectURL(commentPendingImage.previewUrl)
+                            setCommentPendingImage({ file, previewUrl: URL.createObjectURL(file) })
+                          }
+                          if (commentImageInputRef.current) commentImageInputRef.current.value = ''
+                        }}
+                      />
                       <button
                         onClick={handleAddComment}
-                        disabled={!commentInput.trim()}
+                        disabled={!commentInput.trim() || isCommentUploading}
                         className="px-4 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        댓글 등록
+                        {isCommentUploading ? '업로드 중...' : '댓글 등록'}
                       </button>
                     </div>
                   </div>
@@ -1083,6 +1169,20 @@ export default function IssuePage() {
                           <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
                             {comment.content}
                           </div>
+                          {comment.imageUrl && (
+                            <div className="mt-2">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={comment.imageUrl}
+                                alt={comment.imageFilename || '첨부 이미지'}
+                                className="max-w-[320px] max-h-[240px] rounded border cursor-pointer object-contain bg-gray-100"
+                                onClick={() => window.open(comment.imageUrl!, '_blank')}
+                              />
+                              {comment.imageFilename && (
+                                <div className="text-[10px] text-gray-400 mt-0.5">{comment.imageFilename}</div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))
                     )}
