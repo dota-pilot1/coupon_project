@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useConfirmDialog } from '@/components/ConfirmDialog'
 import { toast } from 'sonner'
@@ -21,7 +22,60 @@ import {
   buildTree
 } from '@/entities/docs/model/types'
 
-// ── 컨텍스트 메뉴 ──────────────────────────────────────
+// ── 문서 컨텍스트 메뉴 (링크 복사) ──────────────────────
+type PostCtxMenu = { x: number; y: number; postId: number; folderId: number; postTitle: string } | null
+
+function PostContextMenu({
+  menu, onClose,
+}: {
+  menu: PostCtxMenu
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [onClose])
+
+  if (!menu) return null
+
+  const copyLink = () => {
+    const url = `${window.location.origin}/docs?folderId=${menu.folderId}&postId=${menu.postId}`
+    // HTTP 환경에서는 navigator.clipboard 사용 불가 → fallback
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => toast.success('링크가 복사되었습니다.'))
+    } else {
+      const ta = document.createElement('textarea')
+      ta.value = url
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+      toast.success('링크가 복사되었습니다.')
+    }
+    onClose()
+  }
+
+  return (
+    <div
+      ref={ref}
+      className="fixed z-50 bg-white border rounded shadow-xl py-1 min-w-[160px] text-sm"
+      style={{ top: menu.y, left: menu.x }}
+    >
+      <button className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2"
+        onClick={copyLink}>
+        <span>🔗</span> 링크 복사
+      </button>
+    </div>
+  )
+}
+
+// ── 폴더 컨텍스트 메뉴 ──────────────────────────────────
 type CtxMenu = { x: number; y: number; folderId: number; folderName: string } | null
 
 function ContextMenu({
@@ -87,12 +141,13 @@ import {
 
 // ── 폴더별 문서 목록 (개별 fetch) ──
 function FolderPosts({
-  folderId, depth, selectedPostId, onPostClick,
+  folderId, depth, selectedPostId, onPostClick, onPostContextMenu,
 }: {
   folderId: number
   depth: number
   selectedPostId: number | null
   onPostClick: (post: DocPost) => void
+  onPostContextMenu?: (e: React.MouseEvent, post: DocPost) => void
 }) {
   const { data: posts = [] } = useDocPosts(folderId)
   if (posts.length === 0) return null
@@ -105,6 +160,7 @@ function FolderPosts({
           <div
             key={post.id}
             onClick={() => onPostClick(post)}
+            onContextMenu={(e) => onPostContextMenu?.(e, post)}
             className={`flex items-center gap-1.5 py-1 cursor-pointer rounded text-sm transition-colors ${selectedPostId === post.id
               ? 'bg-blue-100 text-blue-800 font-medium'
               : 'text-gray-600 hover:bg-gray-50'
@@ -120,9 +176,19 @@ function FolderPosts({
   )
 }
 
-// ── 메인 ──────────────────────────────────────────────
+// ── 메인 (Suspense wrapper for useSearchParams) ──────
 export default function DocsPage() {
+  return (
+    <Suspense fallback={null}>
+      <DocsPageInner />
+    </Suspense>
+  )
+}
+
+function DocsPageInner() {
   const { confirm, alert } = useConfirmDialog()
+  const searchParams = useSearchParams()
+  const router = useRouter()
 
   const { data: folders = [] } = useDocFolders()
   const { roots, children: folderChildren } = useMemo(() => buildTree(folders), [folders])
@@ -130,6 +196,43 @@ export default function DocsPage() {
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null)
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null)
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set())
+
+  const [postCtxMenu, setPostCtxMenu] = useState<PostCtxMenu>(null)
+
+  // URL 파라미터 → 상태 동기화 (페이지 로드 시)
+  const initializedRef = useRef(false)
+  useEffect(() => {
+    if (initializedRef.current || folders.length === 0) return
+    const paramFolderId = searchParams.get('folderId')
+    const paramPostId = searchParams.get('postId')
+    if (!paramFolderId) return
+
+    const fId = Number(paramFolderId)
+    const pId = paramPostId ? Number(paramPostId) : null
+
+    // 해당 폴더까지의 경로를 모두 확장
+    const toExpand = new Set<number>()
+    const expandPath = (targetId: number) => {
+      toExpand.add(targetId)
+      const folder = folders.find(f => f.id === targetId)
+      if (folder?.parentId) expandPath(folder.parentId)
+    }
+    expandPath(fId)
+
+    setExpandedFolders(toExpand)
+    setSelectedFolderId(fId)
+    if (pId) setSelectedPostId(pId)
+    initializedRef.current = true
+  }, [folders, searchParams])
+
+  // 상태 → URL 동기화 (선택 변경 시)
+  const updateUrl = useCallback((folderId: number | null, postId: number | null) => {
+    const params = new URLSearchParams()
+    if (folderId) params.set('folderId', String(folderId))
+    if (postId) params.set('postId', String(postId))
+    const qs = params.toString()
+    router.replace(qs ? `/docs?${qs}` : '/docs', { scroll: false })
+  }, [router])
 
   const [sidebarWidth, setSidebarWidth] = useState(250)
   const isResizing = useRef(false)
@@ -231,6 +334,7 @@ export default function DocsPage() {
     setSelectedFolderId(id)
     setSelectedPostId(null)
     setIsEditing(false)
+    updateUrl(id, null)
     setExpandedFolders((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -243,6 +347,19 @@ export default function DocsPage() {
     setSelectedPostId(post.id)
     setIsEditing(false)
     setMmdPreviewRefs({})
+    updateUrl(post.folderId || selectedFolderId, post.id)
+  }
+
+  const handlePostContextMenu = (e: React.MouseEvent, post: DocPost) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setPostCtxMenu({
+      x: e.clientX,
+      y: e.clientY,
+      postId: post.id,
+      folderId: post.folderId || selectedFolderId!,
+      postTitle: post.title,
+    })
   }
 
   const openNewDoc = (folderId: number) => {
@@ -422,6 +539,7 @@ export default function DocsPage() {
               depth={depth + 1}
               selectedPostId={selectedPostId}
               onPostClick={handlePostClick}
+              onPostContextMenu={handlePostContextMenu}
             />
           </>
         )}
@@ -848,6 +966,10 @@ export default function DocsPage() {
         onRename={(id, name) => { setEditingFolderId(id); setEditingFolderName(name) }}
         onDelete={handleDeleteFolder}
       />
+      <PostContextMenu
+        menu={postCtxMenu}
+        onClose={() => setPostCtxMenu(null)}
+      />
 
       <div className="bg-white rounded border mb-4">
         <div className="p-3 border-b bg-gray-50">
@@ -947,6 +1069,7 @@ export default function DocsPage() {
                     const meta = TYPE_META[primaryType as ContentType] ?? TYPE_META.NOTE
                     return (
                       <div key={post.id} onClick={() => handlePostClick(post)}
+                        onContextMenu={(e) => handlePostContextMenu(e, post)}
                         className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${selectedPostId === post.id ? 'bg-blue-50 border-l-2 border-blue-500' : 'hover:bg-gray-50'
                           }`}>
                         <span>{meta.icon}</span>
