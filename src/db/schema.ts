@@ -211,6 +211,14 @@ export const issueChecklist = sqliteTable('issue_checklist', {
   createdAt: text('created_at').notNull(),
 })
 
+export const issueComment = sqliteTable('issue_comment', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  issueId: integer('issue_id').notNull().references(() => issuePost.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  author: text('author').notNull().default('admin'),
+  createdAt: text('created_at').notNull(),
+})
+
 export const issueImage = sqliteTable('issue_image', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   issueId: integer('issue_id').notNull().references(() => issuePost.id, { onDelete: 'cascade' }),

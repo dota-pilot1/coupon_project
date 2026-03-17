@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import dynamic from 'next/dynamic'
 import { useConfirmDialog } from '@/components/ConfirmDialog'
@@ -38,6 +38,14 @@ type IssueImage = {
   issueId: number
   url: string
   filename: string
+  createdAt: string
+}
+
+type IssueComment = {
+  id: number
+  issueId: number
+  content: string
+  author: string
   createdAt: string
 }
 
@@ -127,6 +135,25 @@ export default function IssuePage() {
   const newImageInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<{ file: File; previewUrl: string }[]>([])
+  const [commentInput, setCommentInput] = useState('')
+  const commentInputRef = useRef<HTMLTextAreaElement>(null)
+
+  // URL 해시로 이슈 선택 (링크 공유)
+  useEffect(() => {
+    const hash = window.location.hash
+    if (hash.startsWith('#issue-')) {
+      const id = Number(hash.replace('#issue-', ''))
+      if (!isNaN(id) && id > 0) setSelectedIssueId(id)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (selectedIssueId) {
+      window.history.replaceState(null, '', `#issue-${selectedIssueId}`)
+    } else {
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  }, [selectedIssueId])
 
   // 이슈 목록
   const { data: issues = [] } = useQuery<Issue[]>({
@@ -295,6 +322,60 @@ export default function IssuePage() {
       queryClient.invalidateQueries({ queryKey: ['issue', selectedIssueId] })
     },
   })
+
+  // 댓글 목록
+  const { data: comments = [] } = useQuery<IssueComment[]>({
+    queryKey: ['issueComments', selectedIssueId],
+    queryFn: () => fetch(`/api/issues/${selectedIssueId}/comments`).then((r) => r.json()),
+    enabled: !!selectedIssueId && !isEditing,
+  })
+
+  // 댓글 추가
+  const addCommentMutation = useMutation({
+    mutationFn: (data: { issueId: number; content: string }) =>
+      fetch(`/api/issues/${data.issueId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: data.content }),
+      }).then((r) => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['issueComments', selectedIssueId] })
+      setCommentInput('')
+    },
+  })
+
+  // 댓글 삭제
+  const deleteCommentMutation = useMutation({
+    mutationFn: (commentId: number) =>
+      fetch(`/api/issues/${selectedIssueId}/comments/${commentId}`, { method: 'DELETE' }).then((r) => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['issueComments', selectedIssueId] })
+      toast.success('댓글이 삭제되었습니다.')
+    },
+  })
+
+  const handleAddComment = () => {
+    if (!selectedIssueId || !commentInput.trim()) return
+    addCommentMutation.mutate({ issueId: selectedIssueId, content: commentInput })
+  }
+
+  const handleCopyLink = () => {
+    if (!selectedIssueId) return
+    const url = `${window.location.origin}${window.location.pathname}#issue-${selectedIssueId}`
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(() => toast.success('링크가 클립보드에 복사되었습니다.'))
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = url
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      toast.success('링크가 클립보드에 복사되었습니다.')
+    }
+  }
 
   const gridData = useMemo(() =>
     issues.map((p, i) => ({
@@ -469,6 +550,9 @@ export default function IssuePage() {
                 </>
               ) : selectedIssueId ? (
                 <>
+                  <button onClick={handleCopyLink} className="px-3 py-1 text-xs bg-indigo-500 text-white rounded hover:bg-indigo-600" title="링크 복사">
+                    링크 공유
+                  </button>
                   <button onClick={handleEdit} className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700">
                     수정
                   </button>
@@ -842,6 +926,74 @@ export default function IssuePage() {
                     >
                       추가
                     </button>
+                  </div>
+                </div>
+
+                {/* 댓글 섹션 */}
+                <div className="border rounded-lg overflow-hidden mt-3">
+                  <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b">
+                    <span className="font-medium text-sm">
+                      댓글
+                      {comments.length > 0 && (
+                        <span className="ml-2 text-xs text-gray-500">({comments.length}개)</span>
+                      )}
+                    </span>
+                  </div>
+
+                  {/* 댓글 입력 */}
+                  <div className="p-3 border-b bg-gray-50/50">
+                    <textarea
+                      ref={commentInputRef}
+                      value={commentInput}
+                      onChange={(e) => setCommentInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
+                          e.preventDefault()
+                          handleAddComment()
+                        }
+                      }}
+                      rows={3}
+                      className="w-full border rounded px-3 py-2 text-sm resize-y"
+                      placeholder="댓글을 입력하세요 (Ctrl+Enter로 등록)"
+                    />
+                    <div className="flex justify-end mt-2">
+                      <button
+                        onClick={handleAddComment}
+                        disabled={!commentInput.trim()}
+                        className="px-4 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        댓글 등록
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 댓글 리스트 */}
+                  <div className="divide-y">
+                    {comments.length === 0 ? (
+                      <p className="text-center text-xs text-gray-400 py-6">아직 댓글이 없습니다.</p>
+                    ) : (
+                      comments.map((comment) => (
+                        <div key={comment.id} className="px-4 py-3 hover:bg-gray-50 group">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold text-gray-700">{comment.author}</span>
+                              <span className="text-[11px] text-gray-400">
+                                {comment.createdAt.slice(0, 16).replace('T', ' ')}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => deleteCommentMutation.mutate(comment.id)}
+                              className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-xs px-1 transition-opacity"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                          <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                            {comment.content}
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </>
