@@ -81,7 +81,8 @@ import {
   useDeletePostMutation,
   useCreateFolderMutation,
   useRenameFolderMutation,
-  useDeleteFolderMutation
+  useDeleteFolderMutation,
+  useMoveFolderMutation
 } from '@/entities/docs/api/queries'
 
 // ── 폴더별 문서 목록 (개별 fetch) ──
@@ -164,6 +165,9 @@ export default function DocsPage() {
   const [inlineFolderName, setInlineFolderName] = useState('')
 
   const [ctxMenu, setCtxMenu] = useState<CtxMenu>(null)
+  const [dragFolderId, setDragFolderId] = useState<number | null>(null)
+  const [dropTargetId, setDropTargetId] = useState<number | null>(null) // null = 루트로 이동
+  const [dropPosition, setDropPosition] = useState<'inside' | null>(null)
 
   const { data: posts = [] } = useDocPosts(selectedFolderId)
   const { data: postDetail } = useDocPostDetail(selectedPostId, isEditing)
@@ -192,6 +196,36 @@ export default function DocsPage() {
     setSelectedFolderId(null)
     setSelectedPostId(null)
   })
+
+  const moveFolderMutation = useMoveFolderMutation()
+
+  // 하위 폴더인지 확인 (순환 참조 방지)
+  const isDescendant = (folderId: number, targetId: number): boolean => {
+    const children = folderChildren[folderId] ?? []
+    for (const child of children) {
+      if (child.id === targetId) return true
+      if (isDescendant(child.id, targetId)) return true
+    }
+    return false
+  }
+
+  const handleDrop = (targetFolderId: number | null) => {
+    if (dragFolderId === null) return
+    if (dragFolderId === targetFolderId) return
+    // 자기 자신의 하위로 이동 방지
+    if (targetFolderId !== null && isDescendant(dragFolderId, targetFolderId)) return
+    // 이미 같은 부모면 무시
+    const draggedFolder = folders.find(f => f.id === dragFolderId)
+    if (draggedFolder && draggedFolder.parentId === targetFolderId) return
+
+    moveFolderMutation.mutate({ id: dragFolderId, parentId: targetFolderId })
+    if (targetFolderId !== null) {
+      setExpandedFolders(prev => new Set(prev).add(targetFolderId))
+    }
+    setDragFolderId(null)
+    setDropTargetId(null)
+    setDropPosition(null)
+  }
 
   const handleFolderClick = (id: number) => {
     setSelectedFolderId(id)
@@ -306,12 +340,46 @@ export default function DocsPage() {
     const subFolders = folderChildren[folder.id] ?? []
     const isEditingThis = editingFolderId === folder.id
 
+    const isDragOver = dropTargetId === folder.id && dropPosition === 'inside' && dragFolderId !== folder.id
+
     return (
       <div key={folder.id}>
         <div
-          className={`group flex items-center gap-1 py-1.5 cursor-pointer rounded text-sm transition-colors ${isSelected ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+          className={`group flex items-center gap-1 py-1.5 cursor-pointer rounded text-sm transition-colors ${isDragOver ? 'bg-blue-100 ring-2 ring-blue-400' : isSelected ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
             }`}
           style={{ paddingLeft: `${depth * 14 + 8}px`, paddingRight: '4px' }}
+          draggable
+          onDragStart={(e) => {
+            setDragFolderId(folder.id)
+            e.dataTransfer.effectAllowed = 'move'
+            e.dataTransfer.setData('text/plain', String(folder.id))
+          }}
+          onDragOver={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            if (dragFolderId === folder.id) return
+            if (dragFolderId !== null && isDescendant(dragFolderId, folder.id)) return
+            e.dataTransfer.dropEffect = 'move'
+            setDropTargetId(folder.id)
+            setDropPosition('inside')
+          }}
+          onDragLeave={(e) => {
+            e.stopPropagation()
+            if (dropTargetId === folder.id) {
+              setDropTargetId(null)
+              setDropPosition(null)
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            handleDrop(folder.id)
+          }}
+          onDragEnd={() => {
+            setDragFolderId(null)
+            setDropTargetId(null)
+            setDropPosition(null)
+          }}
           onClick={() => handleFolderClick(folder.id)}
           onContextMenu={(e) => openCtxMenu(e, folder)}
         >
@@ -802,12 +870,44 @@ export default function DocsPage() {
             >+ 폴더</button>
           </div>
 
-          <div className="overflow-y-auto py-1" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+          <div
+            className="overflow-y-auto py-1"
+            style={{ maxHeight: 'calc(100vh - 200px)' }}
+            onDragOver={(e) => {
+              e.preventDefault()
+              if (dragFolderId === null) return
+              // 빈 영역에 드롭하면 루트로 이동
+              const target = e.target as HTMLElement
+              if (target === e.currentTarget) {
+                e.dataTransfer.dropEffect = 'move'
+                setDropTargetId(-1) // -1 = 루트 드롭 영역
+                setDropPosition('inside')
+              }
+            }}
+            onDragLeave={(e) => {
+              if (e.target === e.currentTarget) {
+                setDropTargetId(null)
+                setDropPosition(null)
+              }
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              if (dropTargetId === -1) {
+                handleDrop(null) // null parentId = 루트로 이동
+              }
+            }}
+          >
             {roots.length === 0 && !inlineFolderInput
               ? <p className="text-xs text-gray-400 text-center py-4">+ 폴더 버튼으로 생성하세요.</p>
               : roots.map((f) => renderFolder(f))}
             {/* 루트 레벨 인라인 생성 입력 */}
             {inlineFolderInput?.parentId === null && renderInlineFolderInput(0)}
+            {/* 루트 드롭 안내 */}
+            {dragFolderId !== null && (
+              <div className={`mx-2 my-1 py-2 text-center text-xs rounded border-2 border-dashed transition-colors ${dropTargetId === -1 ? 'border-blue-400 bg-blue-50 text-blue-600' : 'border-gray-300 text-gray-400'}`}>
+                여기에 놓으면 루트로 이동
+              </div>
+            )}
           </div>
 
           <div className="border-t p-2">

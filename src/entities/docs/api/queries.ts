@@ -94,6 +94,23 @@ export function useRenameFolderMutation(onSuccessCallback: () => void) {
     })
 }
 
+export function useMoveFolderMutation() {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: (data: { id: number; parentId: number | null }) =>
+            fetch(`/api/docs/folders/${data.id}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ parentId: data.parentId }),
+            }).then((r) => r.json()),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['docFolders'] })
+            toast.success('폴더가 이동되었습니다.')
+        },
+        onError: () => {
+            toast.error('폴더 이동에 실패했습니다.')
+        },
+    })
+}
+
 export function useDeleteFolderMutation(onSuccessCallback: () => void) {
     const queryClient = useQueryClient()
     return useMutation({
