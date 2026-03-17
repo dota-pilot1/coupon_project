@@ -20,6 +20,20 @@ export async function PATCH(_req: Request, { params }: { params: Promise<{ check
   return NextResponse.json({ ok: true })
 }
 
+export async function PUT(req: Request, { params }: { params: Promise<{ checkId: string }> }) {
+  const { checkId } = await params
+  const id = Number(checkId)
+  const body = await req.json()
+  const { imageUrl, imageFilename } = body
+
+  db.update(issueChecklist)
+    .set({ imageUrl: imageUrl || null, imageFilename: imageFilename || null })
+    .where(eq(issueChecklist.id, id))
+    .run()
+
+  return NextResponse.json({ ok: true })
+}
+
 export async function DELETE(_req: Request, { params }: { params: Promise<{ checkId: string }> }) {
   const { checkId } = await params
   const id = Number(checkId)

@@ -208,6 +208,8 @@ export const issueChecklist = sqliteTable('issue_checklist', {
   issueId: integer('issue_id').notNull().references(() => issuePost.id, { onDelete: 'cascade' }),
   content: text('content').notNull(),
   checked: integer('checked').notNull().default(0), // 0=미완료, 1=완료
+  imageUrl: text('image_url'),
+  imageFilename: text('image_filename'),
   createdAt: text('created_at').notNull(),
 })
 

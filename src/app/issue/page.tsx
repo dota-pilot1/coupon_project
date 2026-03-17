@@ -28,6 +28,8 @@ type ChecklistItem = {
   issueId: number
   content: string
   checked: number
+  imageUrl: string | null
+  imageFilename: string | null
   createdAt: string
 }
 
@@ -137,6 +139,8 @@ export default function IssuePage() {
   const [pendingFiles, setPendingFiles] = useState<{ file: File; previewUrl: string }[]>([])
   const [commentInput, setCommentInput] = useState('')
   const commentInputRef = useRef<HTMLTextAreaElement>(null)
+  const checkImageInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingCheckId, setUploadingCheckId] = useState<number | null>(null)
 
   // URL 해시로 이슈 선택 (링크 공유)
   useEffect(() => {
@@ -353,6 +357,49 @@ export default function IssuePage() {
       toast.success('댓글이 삭제되었습니다.')
     },
   })
+
+  // 체크리스트 이미지 업로드
+  const uploadCheckImage = async (checkId: number, file: File) => {
+    setUploadingCheckId(checkId)
+    try {
+      const { presignedUrl, publicUrl } = await fetch('/api/upload/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      }).then((r) => r.json())
+
+      await fetch(presignedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      })
+
+      await fetch(`/api/issues/${selectedIssueId}/checklist/${checkId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl: publicUrl, imageFilename: file.name }),
+      })
+
+      queryClient.invalidateQueries({ queryKey: ['issue', selectedIssueId] })
+      toast.success('이미지가 첨부되었습니다.')
+    } catch {
+      toast.error('이미지 업로드에 실패했습니다.')
+    } finally {
+      setUploadingCheckId(null)
+      if (checkImageInputRef.current) checkImageInputRef.current.value = ''
+    }
+  }
+
+  // 체크리스트 이미지 삭제
+  const removeCheckImage = async (checkId: number) => {
+    await fetch(`/api/issues/${selectedIssueId}/checklist/${checkId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageUrl: null, imageFilename: null }),
+    })
+    queryClient.invalidateQueries({ queryKey: ['issue', selectedIssueId] })
+    toast.success('이미지가 삭제되었습니다.')
+  }
 
   const handleAddComment = () => {
     if (!selectedIssueId || !commentInput.trim()) return
@@ -887,22 +934,56 @@ export default function IssuePage() {
                       <p className="text-center text-xs text-gray-400 py-4">체크리스트 항목이 없습니다.</p>
                     ) : (
                       checklist.map((item) => (
-                        <div key={item.id} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 group">
-                          <input
-                            type="checkbox"
-                            checked={item.checked === 1}
-                            onChange={() => toggleCheckMutation.mutate(item.id)}
-                            className="w-4 h-4 cursor-pointer accent-green-600"
-                          />
-                          <span className={`flex-1 text-sm ${item.checked === 1 ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                            {item.content}
-                          </span>
-                          <button
-                            onClick={() => deleteCheckMutation.mutate(item.id)}
-                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-xs px-1 transition-opacity"
-                          >
-                            ✕
-                          </button>
+                        <div key={item.id} className="px-3 py-2 hover:bg-gray-50 group">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={item.checked === 1}
+                              onChange={() => toggleCheckMutation.mutate(item.id)}
+                              className="w-4 h-4 cursor-pointer accent-green-600"
+                            />
+                            <span className={`flex-1 text-sm ${item.checked === 1 ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                              {item.content}
+                            </span>
+                            <button
+                              onClick={() => {
+                                checkImageInputRef.current?.setAttribute('data-check-id', String(item.id))
+                                checkImageInputRef.current?.click()
+                              }}
+                              disabled={uploadingCheckId === item.id}
+                              className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-indigo-600 text-[11px] px-1 transition-opacity disabled:opacity-50"
+                              title="이미지 첨부"
+                            >
+                              {uploadingCheckId === item.id ? '업로드중...' : '+ 이미지'}
+                            </button>
+                            <button
+                              onClick={() => deleteCheckMutation.mutate(item.id)}
+                              className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-xs px-1 transition-opacity"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          {item.imageUrl && (
+                            <div className="ml-6 mt-2 relative inline-block group/img">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={item.imageUrl}
+                                alt={item.imageFilename || '첨부 이미지'}
+                                className="max-w-[280px] max-h-[200px] rounded border cursor-pointer object-contain bg-gray-100"
+                                onClick={() => window.open(item.imageUrl!, '_blank')}
+                              />
+                              <button
+                                onClick={() => removeCheckImage(item.id)}
+                                className="absolute top-1 right-1 opacity-0 group-hover/img:opacity-100 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center transition-opacity leading-none"
+                                title="이미지 삭제"
+                              >
+                                ✕
+                              </button>
+                              {item.imageFilename && (
+                                <div className="text-[10px] text-gray-400 mt-0.5">{item.imageFilename}</div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))
                     )}
@@ -927,6 +1008,17 @@ export default function IssuePage() {
                       추가
                     </button>
                   </div>
+                  <input
+                    ref={checkImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      const checkId = Number(checkImageInputRef.current?.getAttribute('data-check-id'))
+                      if (file && checkId) uploadCheckImage(checkId, file)
+                    }}
+                  />
                 </div>
 
                 {/* 댓글 섹션 */}
